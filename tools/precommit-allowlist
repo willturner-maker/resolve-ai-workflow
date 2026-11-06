@@ -1,0 +1,7 @@
+# known-legit matches (regex per line)
+# placeholder volume names: convention is that examples start with "Your"
+/Volumes/Your[A-Za-z0-9]*
+# standard commit trailers carry an email by design
+^\s*(Co-Authored-By|Signed-off-by|Reviewed-by|Thanks-to|Acked-by):
+# the scanner's own rules table (it contains the patterns it hunts for)
+^\s*(home-path|named-volume|camera-filename|credential-assignment|key-format|private-key-block|secret-file-path|email)\|

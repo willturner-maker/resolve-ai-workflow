@@ -132,7 +132,14 @@ the same day it shipped.
    and the engine KV cache. Configure Resolve's cache locations once (see the
    MCP's storage guidance), and pass `EXTERNAL_CACHE` to the launcher for the
    Splash disk cache on a fast external SSD.
-6. **Grading is read-backs, not claims** — any agent's "done" gets a probe
+6. **Publish-safe by pre-commit scan** — `tools/precommit-scan.sh` refuses content, file
+   paths **and commit messages** that would leak home paths, named volumes, camera/reel
+   filenames, credential shapes, emails, or client/project names (deny terms live in
+   `.git/info/precommit-terms`, never committed). `bash tools/precommit-scan.sh --install`
+   wires both hooks; `--all` audits the whole tree. A property description beats a name:
+   "8128×4288 HEVC Main 10, 56 min" tells a reader more than a camera-generated filename
+   ever did — and if you try to quote such a filename here, the guard refuses the commit.
+7. **Grading is read-backs, not claims** — any agent's "done" gets a probe
    (ffprobe / item geometry / pixel diff of rendered frames) before it counts.
 
 ## Troubleshooting quick hits
