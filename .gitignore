@@ -1,0 +1,4 @@
+blender/render/
+*.exr
+*.mov
+.DS_Store
