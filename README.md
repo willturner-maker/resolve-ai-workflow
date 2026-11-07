@@ -19,6 +19,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 │      ├── davinci-resolve            community Python MCP  — live editing/render/guardrails │
 │      ├── davinci-resolve-advanced   community Node MCP    — offline DB/DRX/DRT/QC          │
 │      ├── DaVinci Resolve            official Blackmagic MCP (ships in Studio 21.1+)       │
+│      ├── brave-search (optional)    official Brave MCP    — web research (paid key)       │
 │      ▼                                                                                    │
 │  DaVinci Resolve Studio 21.2  ←── EXR title sequences rendered by headless Blender        │
 │      ▲                                       (Cycles on Metal, film_transparent)          │
@@ -35,6 +36,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 | **Community `davinci-resolve` MCP** ([samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp)) | The hands: ~36 action-dispatch tools over the whole scripting API — media pool, timelines, ripple edits with dry-run plans, markers, Fusion comps, render queue + **verified outputs** (ffprobe cross-check of every render), and a live `api_truth` knowledge base of verified Resolve API quirks. Destructive ops auto-archive timelines first. |
 | **`davinci-resolve-advanced` MCP** (same project) | The forensic layer: closed-`Project.db` reads/writes (captions, speed ramps), `.drx` grade XML, DRT timelines, FCPXML/EDL/AAF conform, deliverable-QC specs — all without Resolve running. |
 | **Official ResolveMCP** (bundled in Resolve Studio 21.1+) | Blackmagic's own 18-tool surface: canonical and versioned with the app; useful cross-check and fallback. |
+| **Brave Search MCP** (opt-in: official `@brave/brave-search-mcp-server`, MIT) | The research leg — the only one that costs money: live fact-checks no model can know, like whether a new Resolve build changed an API behaviour or whether an upstream release has wheels on PyPI yet. Priced **$5 per 1,000 queries**, with **$5 of free credit applied automatically every month** (~1,000 free queries; card required at signup even for free use). The only leg where queries leave the machine — search strings get the same scrubbing discipline as commit messages. Setup, pricing details and a plan-bound-key gotcha in [`mcp/mcp-config.md`](mcp/mcp-config.md). |
 | **splash-dashboard** ([rickhuizinga/splash-dashboard](https://github.com/rickhuizinga/splash-dashboard)) | Live engine observability on :8280: KV residency, prefix-cache hit rate, admission pacing, decode batch widths — the instrument panel that turns "the model feels slow" into numbers. |
 | **Blender (LTS, at `/Applications`)** | Content forge: 3D title stings, extruded logos, generated media — scripted headless (`--background --python`), rendered transparent-EXR, imported into Resolve as sequence clips with straight alpha. See [`blender/`](blender/). |
 | **ffmpeg / ffprobe** (brew) | The verification layer: every render gets probed (frame count, codecs, duration) before it's trusted; sequence encoding; frame extraction for visual checks. |
@@ -71,8 +73,9 @@ MAX_MEMORY=32G MAX_CACHE_DISK=64G EXTERNAL_CACHE="/Volumes/YourSSD/splash-cache"
 - `start.sh` / `stop.sh` — the exact scripts this workstation runs (with the
   memory-tuning log in the header comments: why 56 GB working set / 128 GB disk
   cache on a 96 GB machine next to a running Resolve).
-- `mcp/mcp-config.md` — how the three MCP servers are registered, verified and
-  updated, and why all three are kept side by side.
+- `mcp/mcp-config.md` — how the three Resolve MCP servers (plus the optional
+  `brave-search` research companion) are registered, verified and updated, and why
+  all of them are kept side by side.
 - `blender/` — the title pipeline: `exr_title_demo.py` + a README of every
   Blender 5.x gotcha and the Resolve import specifics (multi-path EXR import,
   Alpha mode → Straight, end-exclusive append frames, proof-render verification).
@@ -212,6 +215,7 @@ the same day it shipped.
 - Resolve free edition → Workspace ▸ Scripts ▸ `resolve_bridge`; the community server auto-uses it on 21.0.x.
 - Vision probe returns 0 faces on a big frame → you're asking a detector to see a 1 % face. Run at native resolution (`--tile auto`), then let stage 2 crop; see the two-stage rule in `vision/README.md`.
 - Server's `strata_run(analyzers=['face'])` says it can't run → mediapipe/opencv belong to the *server* venv there: `bash vision/install-vision.sh --mcp-server-venv <server venv>`, then `/mcp` → reconnect.
+- Brave MCP connects but every search returns nothing → the key belongs to the **Answers** plan, not **Search** — keys are plan-bound; see `mcp/mcp-config.md`.
 
 ## Verified stack
 
@@ -219,7 +223,8 @@ Checked current on 2026-11-07 (how to re-check is below), so these are versions 
 **latest that day**, not guesses:
 
 Splash 1.6.0 · Qwen3.8-Flash-Next IQ3_S · Claude Code 2.1.319 ·
-davinci-resolve-mcp 4.19.3 (Python venv + Node 26.13.0) · DaVinci Resolve Studio
+davinci-resolve-mcp 4.19.3 (Python venv + Node 26.13.0) · brave-search MCP 2.1.4
+(opt-in) · DaVinci Resolve Studio
 **21.2.0.6** (21.2 shipped 2026-11-04) · Blender 5.2.3 LTS · ffmpeg 9.0.2 ·
 whisper.cpp 1.9.5 · macmon 0.11.0 ·
 vision add-on on Python 3.12.16 (mediapipe 1.2.2 · opencv + opencv-contrib 5.0.0.93 ·
@@ -248,7 +253,8 @@ upstream path only — `npx -y davinci-resolve-mcp@latest sync` — then reconne
 
 Scripts in this repo: MIT (see `LICENSE`). The tools it installs have their own
 licenses — Splash (incoai), davinci-resolve-mcp (MIT, samuelgursky),
-splash-dashboard (rickhuizinga), Blender (GPL), Claude Code (Anthropic).
+brave-search-mcp-server (MIT, Brave), splash-dashboard (rickhuizinga),
+Blender (GPL), Claude Code (Anthropic).
 
 The **vision add-on's** model weights, read from the `LICENSE` file in each source directory:
 OpenCV **YuNet** (detector) is **MIT**, and **SFace** (recogniser) is **Apache-2.0** — both stated
