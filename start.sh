@@ -39,6 +39,9 @@ THINKING_BUDGET="16384"     # cap runaway thinking so requests still answer (~3 
 EXTERNAL_CACHE=""
 
 OPEN_MACMON=1               # pop a second Terminal window running the macmon TUI
+OPEN_METRICS=1              # brew services leg: Prometheus (:9090) scrapes the engine's
+                            # /metrics; Grafana (:3000) serves "Splash Engine Overview"
+                            # with history the live dashboard can't keep. --no-metrics skips it.
 
 # Engine logs live where dash.py's log stream tails them:
 LOG_DIR="${HOME}/Library/Logs/splash"
@@ -57,8 +60,9 @@ for arg in "$@"; do
   case "$arg" in
     --27b) MODEL="$MODEL_27B" ;;
     --no-macmon) OPEN_MACMON=0 ;;
+    --no-metrics) OPEN_METRICS=0 ;;
     -h|--help)
-      echo "Usage: $0 [--27b] [--no-macmon]"
+      echo "Usage: $0 [--27b] [--no-macmon] [--no-metrics]"
       echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=128G EXTERNAL_CACHE=/path"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
@@ -147,6 +151,32 @@ echo "$DASH_PID" > "$DASH_PID_FILE"
 sleep 2
 kill -0 "$DASH_PID" 2>/dev/null && info "Dashboard → http://127.0.0.1:${DASH_PORT}" \
   || warn "Dashboard may have failed — see ~/splash-dashboard.log"
+
+# ── 2b. Metrics + Grafana (brew services; optional) ─────────────────
+# Prometheus (15 s scrape of the engine's native /metrics) keeps history;
+# Grafana renders it. The leg is idempotent: running services are left alone,
+# missing installs are skipped with a hint, never installed silently.
+# One-time setup: brew install prometheus grafana, then point the Prometheus
+# config (brew prefix etc/prometheus.yml) at localhost:<splash port>/metrics
+# and provision Grafana (datasource + the splash-overview dashboard) under
+# its provisioning dir — note Grafana 13 uses [paths] provisioning = ... plus
+# permitted_provisioning_paths for external dirs, or provisioning silently no-ops.
+if [[ $OPEN_METRICS -eq 1 ]] && command -v brew >/dev/null 2>&1; then
+  for svc in prometheus grafana; do
+    if brew services info "$svc" --json 2>/dev/null | grep -q '"running": *true'; then
+      info "$svc already running."
+    elif brew list --formula 2>/dev/null | grep -qx "$svc"; then
+      info "Starting $svc..."
+      brew services start "$svc" >/dev/null 2>&1 || warn "brew services start $svc failed"
+    else
+      info "$svc not installed — skipping metrics leg (brew install $svc to enable)."
+    fi
+  done
+  sleep 2
+  curl -sf http://127.0.0.1:3000/api/health >/dev/null 2>&1 \
+    && info "Grafana → http://127.0.0.1:3000/d/splash-overview   (Prometheus → http://127.0.0.1:9090)" \
+    || warn "Grafana not answering on :3000 yet — first start can take ~10 s."
+fi
 
 # ── 3. Launch DaVinci Resolve (skip if already running) ────────────
 if pgrep -x "Resolve" >/dev/null 2>&1; then

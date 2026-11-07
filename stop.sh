@@ -59,6 +59,16 @@ elif pkill -f "python3.*dash.py" 2>/dev/null; then
   info "Dashboard stopped (by process name)"
 fi
 
+# ── 2b. Stop the metrics leg (Prometheus + Grafana brew services) ───
+if command -v brew >/dev/null 2>&1; then
+  for svc in prometheus grafana; do
+    if brew services info "$svc" --json 2>/dev/null | grep -q '"running": *true'; then
+      info "Stopping $svc..."
+      brew services stop "$svc" >/dev/null 2>&1 || warn "brew services stop $svc failed"
+    fi
+  done
+fi
+
 # ── 3. Stop any leftover splash agent processes ────────────────────
 pkill -f "splash claude" 2>/dev/null || true
 

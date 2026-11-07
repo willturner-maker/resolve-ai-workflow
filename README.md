@@ -38,6 +38,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 | **Official ResolveMCP** (bundled in Resolve Studio 21.1+) | Blackmagic's own 18-tool surface: canonical and versioned with the app; useful cross-check and fallback. |
 | **Brave Search MCP** (opt-in: official `@brave/brave-search-mcp-server`, MIT) | The research leg — the only one that costs money: live fact-checks no model can know, like whether a new Resolve build changed an API behaviour or whether an upstream release has wheels on PyPI yet. Priced **$5 per 1,000 queries**, with **$5 of free credit applied automatically every month** (~1,000 free queries; card required at signup even for free use). The only leg where queries leave the machine — search strings get the same scrubbing discipline as commit messages. Setup, pricing details and a plan-bound-key gotcha in [`mcp/mcp-config.md`](mcp/mcp-config.md). |
 | **splash-dashboard** ([rickhuizinga/splash-dashboard](https://github.com/rickhuizinga/splash-dashboard)) | Live engine observability on :8280: KV residency, prefix-cache hit rate, admission pacing, decode batch widths — the instrument panel that turns "the model feels slow" into numbers. |
+| **Prometheus + Grafana** (opt-in; `--no-metrics` to skip) | History leg: the engine serves native Prometheus text at `/metrics` (~130 `splash_*` series), Prometheus scrapes it at 15 s, and a provisioned Grafana dashboard (:3000) graphs scheduler/admission states, decode batch-width mix, KV pages, SSD-cache IO and TTFT/ITL quantiles with 15 days of retention. Provisioning is file-based, so a fresh machine reproduces it; the one gotcha: Grafana 13 renamed its provisioning ini keys — `[paths] provisioning = …` **plus** `permitted_provisioning_paths`, or provisioning silently loads nothing. |
 | **Blender (LTS, at `/Applications`)** | Content forge: 3D title stings, extruded logos, generated media — scripted headless (`--background --python`), rendered transparent-EXR, imported into Resolve as sequence clips with straight alpha. See [`blender/`](blender/). |
 | **ffmpeg / ffprobe** (brew) | The verification layer: every render gets probed (frame count, codecs, duration) before it's trusted; sequence encoding; frame extraction for visual checks. |
 | **whisper.cpp / whisper CLI** (brew + MCP-integrated) | Local transcription; the MCP server also feeds transcripts into timeline subtitle tracks and cut-candidate proposals. |
@@ -59,7 +60,7 @@ git clone https://github.com/willturner-maker/resolve-ai-workflow.git
 cd resolve-ai-workflow
 bash install.sh            # everything below, wired into Claude Code
 bash install.sh --vision   # same, plus the opt-in face/mouth layer (vision/README.md)
-start-resolve-ai.sh        # Splash → dashboard → Resolve → Claude Code (one command)
+start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → Claude Code (one command)
 stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
 ```
 
