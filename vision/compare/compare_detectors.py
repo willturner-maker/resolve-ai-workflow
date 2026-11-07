@@ -9,6 +9,8 @@ grid, box-for-box agreement rather than a face count.
 Usage:
   <venv python> compare_detectors.py --backend yunet  --frame FRAME.png --out OUT.json --embed
   <venv python> compare_detectors.py --backend mediapipe --frame FRAME.png --out OUT.json
+  <venv python> compare_detectors.py --backend yunet --frame F.png --out O.json --embed \
+      --recognizer face_recognition_sface_2021dec_int8.onnx      # quantisation A/B
 
 Backends:
   yunet      OpenCV FaceDetectorYN, + SFace with --embed     (the live stack; no extra package)
@@ -60,10 +62,13 @@ def run_yunet(img, opts):
     det = cv2.FaceDetectorYN.create(model, "", (64, 64), opts.score_thresh, 0.3, 5000)
     init = time.time() - t0
     gx, gy = auto_grid(img.shape) if opts.tile == "auto" else tuple(int(v) for v in opts.tile.split("x"))
-    boxes, tsum = [], 0.0
+    boxes, tsum, esum = [], 0.0, 0.0
     feats, errs = {}, []
-    sf = (cv2.FaceRecognizerSF.create(os.path.join(base, "face_recognition_sface_2021dec.onnx"), "")
-          if opts.embed else None)
+    # --recognizer swaps the SFace build (fp32 vs the Zoo int8 builds) while holding the
+    # detector fixed, so a quantisation A/B is one flag, not a second harness.
+    recog = opts.recognizer or "face_recognition_sface_2021dec.onnx"
+    recog_path = recog if os.path.isabs(recog) else os.path.join(base, recog)
+    sf = cv2.FaceRecognizerSF.create(recog_path, "") if opts.embed else None
     import numpy as np
     for i, j, x0, y0, x1, y1 in tiles(img.shape, gx, gy):
         # contiguous copy: a slice view shares the full row stride, and alignCrop
@@ -85,6 +90,7 @@ def run_yunet(img, opts):
                 # landmarks (row cols 5..14) to produce the aligned 112px crop the
                 # model was trained on. --align bbox is the A/B control that measures
                 # how much that matters (it feeds a plain bbox crop instead).
+                tE = time.time()
                 try:
                     if opts.align == "bbox":
                         bx, by = int(float(f[0])), int(float(f[1]))
@@ -95,12 +101,19 @@ def run_yunet(img, opts):
                         vec = sf.feature(patch)
                     else:
                         vec = sf.feature(sf.alignCrop(tile_img, f))
+                    esum += time.time() - tE
                     feats[key] = [float(v) for v in vec.flatten()]
                 except Exception as e:
                     feats[key] = None
                     errs.append(f"{opts.align}: {type(e).__name__}: {str(e)[:80]}")
-    return {"model": "opencv YuNet" + (" + SFace" if opts.embed else ""),
-            "init_s": round(init, 2), "grid": [gx, gy], "detect_s": round(tsum, 3),
+    label = "opencv YuNet"
+    if opts.embed:
+        label += f" + SFace({os.path.basename(recog_path)})"
+    return {"model": label, "recognizer": os.path.basename(recog_path),
+            "init_s": round(init, 2), "grid": [gx, gy],
+            "detect_s": round(tsum, 3),
+            "embed_s": round(esum, 3) if opts.embed else None,
+            "embedded": sum(1 for v in feats.values() if v) if opts.embed else None,
             "boxes": boxes, "embeddings": feats if opts.embed else None,
             "errors": errs[:8], "error_count": len(errs)}
 
@@ -149,6 +162,9 @@ def main():
                     help="SFace input: alignCrop (the correct one) or a plain bbox crop "
                          "(the A/B control that measures how much alignment matters)")
     ap.add_argument("--model", default=None)
+    ap.add_argument("--recognizer", default=None,
+                    help="SFace build to embed with (file in --models, or a path). "
+                         "The Zoo int8/int8bq builds let you A/B quantisation against fp32.")
     ap.add_argument("--models", default=None,
                     help="directory holding the .onnx/.tflite files (default: $VISION_MODELS, "
                          "then ./models next to this script)")
@@ -165,7 +181,8 @@ def main():
                 "score_thresh": opts.score_thresh, "python": sys.version.split()[0]})
     with open(opts.out, "w") as f:
         json.dump(out, f)
-    print(f"{opts.backend}: {out['face_count']} faces, detect {out['detect_s']}s, "
+    emb = f", embed {out['embed_s']}s ({out['embedded']} vectors)" if opts.embed else ""
+    print(f"{opts.backend}: {out['face_count']} faces, detect {out['detect_s']}s{emb}, "
           f"total {out['total_s']}s, grid {out['grid']}, init {out['init_s']}s -> {opts.out}")
 
 

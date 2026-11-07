@@ -224,13 +224,17 @@ davinci-resolve-mcp 4.19.3 (Python venv + Node 26.13.0) · DaVinci Resolve Studi
 whisper.cpp 1.9.5 · macmon 0.11.0 ·
 vision add-on on Python 3.12.16 (mediapipe 1.2.2 · opencv + opencv-contrib 5.0.0.93 ·
 numpy 2.5.4 — `pip list --outdated` in that venv returns nothing relevant, so the pins
-are not holding anything back) ·
+are not holding anything back; OpenCV **5.1.0** is tagged upstream as of 2026-11-06 but has
+**no PyPI wheels yet**, so 5.0.0.93 is the newest installable, and a version-to-version
+re-measure of the vision numbers belongs with any future bump) ·
 macOS 27.2 arm64 · M5 Ultra 64-core GPU, 96 GB unified.
 
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind
 ~/resolve-vision-venv312/bin/pip list --outdated          # vision pins
+~/resolve-vision-venv312/bin/pip index versions opencv-contrib-python   # source releases
+                                                        # can outrun the wheels that install them
 npm view @brave/brave-search-mcp-server version           # npx-run servers
 # and inside a session: resolve_control(action='mcp_update_status', params={force_check:true})
 ```

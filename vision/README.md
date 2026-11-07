@@ -46,7 +46,11 @@ in that directory has its licence stated below.
 
 One frame of 8128×4288 anamorphic HEVC from a multi-track choral recording (a wide shot of a
 choir riser, faces 43–100 px wide), Apple M5 Ultra. Exact pins: mediapipe 1.2.2, opencv(-contrib)
-5.0.0.93, numpy 2.5.4, Python 3.12.16. Re-runnable with
+5.0.0.93, numpy 2.5.4, Python 3.12.16 — `5.0.0.93` is the newest wheel on PyPI: OpenCV
+**5.1.0** was tagged upstream 2026-11-06 with no Python wheels yet (checked 2026-11-07 against
+`opencv-python`, `-contrib` and `-headless`), so there is nothing to move to, and one 5.1.0
+change touches this stack (rule 4 below). When a 5.1 wheel does land, re-run
+`face_probe.py` and `compare/` before trusting any number on this page. Re-runnable with
 `vision/face_probe.py`; these are read-backs from that run, not estimates.
 
 **Stage 1 — OpenCV YuNet detection (+ SFace embeddings) over native-resolution tiles:**
@@ -72,7 +76,7 @@ same frame read 94 faces.
 ≈3.4 ms per face. (Detection counts and landmark hits are independent: a box can be right while
 the mesh model declines to fit it, which is why 83 ≠ 90.)
 
-## Three rules that cost real time to learn
+## Four rules that cost real time to learn
 
 1. **No detector here finds faces on a downscaled wide shot.** MediaPipe returns zero: measured
    0 faces at a 1600 px cap *and* at a 4032 px cap on a frame that genuinely held 90+, in under
@@ -93,6 +97,14 @@ the mesh model declines to fit it, which is why 83 ≠ 90.)
    `FaceRecognizerSF.match(a, b, dis_type)` take their options **positionally** in OpenCV 5
    (keyword arguments raise), and a YuNet row is `[x, y, w, h, lx1, ly1 … lx5, ly5, score]` —
    those five landmarks feed `alignCrop`, which is the only correct input to SFace.
+4. **`FaceRecognizerSF.match()` rewrites the vectors you hand it.** Measured on 5.0.0.93: both
+   arguments are L2-normalised **in place** (norm 9.92 → 1.00), so a pairwise-distance loop
+   silently converts the embeddings you were holding. The reported distance is unaffected (cosine
+   stays cosine), which is what makes this easy to miss — but anything that later reasons about
+   raw activations, normalises a second time, or stores those arrays for a second pass is now
+   working on different data than it thinks. Fixed upstream in OpenCV **5.1.0** ("do not modify
+   the input features in `FaceRecognizerSF::match`", merged 2026-08-28). Normalise explicitly and
+   keep the originals, which is what `compare/recog_quality.py` does.
 
 ## What it actually buys you
 
@@ -199,19 +211,49 @@ reported), not by producing a bigger count. `compare/merge_compare.py` does the 
 `compare/recog_quality.py` measures recognition separability without labels, and its
 `--align bbox` control is how the alignment result above was derived.
 
-**Two Zoo items I have not installed, listed so they're not rediscovered as news** (unmeasured
-here — that's why they aren't in the installer): `face_recognition_sface_2021dec_int8.onnx`, an
-int8 build of the same recogniser, which would cut the 38.7 MB download and probably speed the
-recognition leg, at an unknown cost to the margin — and on ~55 px faces the margin is already the
-weak part, so it needs `recog_quality.py` numbers before it earns a pin. And
-`models/face_image_quality_assessment_ediffiqa`, a face-image-quality model: a plausible
-pre-filter for "is this box a usable face or a blurry 40 px smudge", which is exactly the failure
-the threshold audit had to do by eye. Check its weight licence the same way as the others.
+### The two Zoo items I tried and did not keep (measured, not assumed)
+
+Both were downloaded and run against this footage; neither is in the installer. The reason is
+in each row, and `compare/` reproduces both.
+
+**Quantised SFace** — `compare_detectors.py --recognizer <build>` on two frames 1 s apart,
+90 faces each, 88 position-matched same-face pairs and 8007 different-face pairs:
+
+| SFace build | weight | embedding wall | same-face cosine median | splits same person | merges different people | AUC |
+|---|---|---|---|---|---|---|
+| `2021dec` (**installed**, fp32) | 38.7 MB | 0.67 s (7.5 ms/face) | **0.901** | 1.1 % | 2.0 % | 0.999 |
+| `2021dec_int8` | 9.9 MB | **1.44 s (16 ms/face)** | 0.879 | 1.1 % | 2.0 % | 0.999 |
+| `2021dec_int8bq` | 10.7 MB | — *does not load*: `-215 Assertion failed (ninputs == 1 …)` in OpenCV 5's new graph engine | | | | |
+
+The quantised build is **2.1× slower per face** on this build (quantised ops aren't accelerated
+here), loses 0.022 of same-face cosine, and buys only a 29 MB smaller download — so the
+"quantise to go faster" instinct is wrong for this stack. Separately, the two builds' vectors
+are *near* but not interchangeable: same face scores cosine median **0.954** (min 0.784) across
+builds, and an fp32 library queried with int8 vectors merges **1.6 %** of different-person pairs
+at the 0.363 threshold. Don't mix them inside one identity library.
+
+**eDifFIQA face-image-quality** (`ediffiqa_tiny_jun2024.onnx`, 7.3 MB, **CC-BY-4.0** — the only
+weight in Zoo's face family here that isn't MIT/Apache) — `compare/quality_filter.py`, YuNet at
+score 0.30 on the same frame: 98 candidate boxes, **91 still present 1 s later, 7 gone**.
+
+| question | result |
+|---|---|
+| Can a quality score spot the junk boxes better than YuNet's own score? | **No.** AUC(persistent vs transient): quality **0.838** vs det score **0.832** — the same information, and it tracks det score (Spearman 0.686) rather than adding to it |
+| Is there anything left to filter at the live default 0.5? | 90 faces → 88 persistent, 2 transient; quality AUC there is **0.54**, a coin flip |
+| Do its published bands transfer to a wide shot? | **No.** The model card's "high quality > 0.5" is the extreme top here (max 0.57, median 0.39); genuine persistent faces score as low as **0.006** (det score 0.75) |
+| What would it cost to run on every face? | **4.6 ms/face** (0.45 s for 98) — ~60 % of the SFace embedding leg, for a second opinion that agrees with the first |
+| Could it at least gate the identity pass? | Weak: Spearman(quality, same-face cosine) **0.394**. Skipping embeddings on "low quality" crops risks real people to save 7.5 ms |
+
+The rule this taught me, worth carrying: **a candidate has to beat the signal you already have,
+scored on the same groups.** Splitting detections into "confident" and "marginal" by detection
+score and then showing a quality model separates them proves nothing — that's detection score
+predicting detection score. Cross-frame persistence is the label-free reality proxy that makes
+the comparison fair, and it says the quality model is redundant here.
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `install-vision.sh` | Builds the pinned 3.12 venv, fetches the five model files (MediaPipe landmarker/pose/blaze ×2 + YuNet + SFace), loads each one to prove it isn't truncated, optionally patches the MCP server venv. `--dry-run` is honest: it writes nothing. |
-| `compare/` | The harness for judging detectors: one backend per process, IoU matching across runs, label-free recognition separability, and `threshold_audit.py` for deciding a score threshold on *your* footage — cross-frame persistence plus a contact sheet of the marginal boxes. Keep it to re-derive any number here, or to check a future model before it goes near the pipeline. |
+| `compare/` | The harness for judging detectors and models: one backend per process, IoU matching across runs, label-free recognition separability (`--recognizer` swaps the SFace build for quantisation A/B), `threshold_audit.py` for deciding a score threshold on *your* footage, and `quality_filter.py` for testing a quality-assessment model as a false-positive filter — persistence-based groups, with detection score as the competing predictor. Keep it to re-derive any number here, or to check a future model before it goes near the pipeline. |
 | `face_probe.py` | Frame → JSON: native-tile detection, merged cross-tile duplicates, per-face crops → landmarks + blendshapes, optional embeddings. Its docstring carries the API gotchas above. **stdout is pure JSON**; the noise you see is MediaPipe's own glog chatter on stderr — silence it with `2>/dev/null` when parsing. |
