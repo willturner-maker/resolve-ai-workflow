@@ -2,3 +2,12 @@ blender/render/
 *.exr
 *.mov
 .DS_Store
+
+__pycache__/
+*.pyc
+
+# vision comparison scratch: weights and extracted frames stay local
+compare/models/
+runs/
+*.onnx
+compare/models

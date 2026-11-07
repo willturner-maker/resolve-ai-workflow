@@ -12,10 +12,18 @@
 #   7. start.sh / stop.sh into ~/bin
 #   8. Claude Code permission defaults for the MCP tools
 #
-# Verified against: macOS 27.2 arm64, DaVinci Resolve Studio 21.2, Splash 1.6.0,
-# MCP 4.19.2, node 26.x, ffmpeg 9.x. Python 3.11+ required by the MCP installer.
+# Opt-in, not installed by default:
+#   --vision   face/mouth analysis layer (its own Python 3.12 venv + model files).
+#              MediaPipe + OpenCV YuNet/SFace: ~54 MB of models, every one of them with a
+#              stated licence (YuNet MIT, SFace Apache-2.0). Detection, identity, landmarks
+#              and mouth state in one probe script — see vision/README.md.
 #
-# Run:  bash install.sh
+# Verified against: macOS 27.2 arm64, DaVinci Resolve Studio 21.2, Splash 1.6.0,
+# MCP 4.19.3, node 26.x, ffmpeg 9.x. Python 3.11+ required by the MCP installer.
+# The --vision path was verified end-to-end on that host on 2026-11-06: fresh venv, every
+# pin installed at its pinned version, models downloaded, probe run against real footage.
+#
+# Run:  bash install.sh [--vision]
 
 set -euo pipefail
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -23,6 +31,16 @@ log()  { printf "${BLUE}→${NC} %s\n" "$*"; }
 ok()   { printf "${GREEN}✓${NC} %s\n" "$*"; }
 warn() { printf "${YELLOW}⚠${NC} %s\n" "$*"; }
 die()  { printf "${RED}✗${NC} %s\n" "$*" >&2; exit 1; }
+
+# ── 0. Options ─────────────────────────────────────────────────────────────
+VISION=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vision) VISION=1; shift ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    *) die "unknown option: $1 (see: bash install.sh --help)" ;;
+  esac
+done
 
 echo "============================================================"
 echo "  Resolve AI workstation installer"
@@ -87,17 +105,27 @@ if [[ ! -d /Applications/Blender.app ]]; then
   log "The headless title pipeline in blender/ was verified on Blender 5.2.3 LTS."
 fi
 
-# ── 7. start.sh / stop.sh into ~/bin ───────────────────────────────────────
+# ── 7. Vision add-on (opt-in: --vision) ────────────────────────────────────
+# Deliberately not part of the default install: its own Python 3.12, ~54 MB of model files,
+# and MediaPipe/OpenCV wheels (vision/README.md). Licences are stated per model there.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$VISION" == 1 ]]; then
+  log "Vision add-on (own venv, so a server repair can't wipe it)..."
+  bash "$REPO_DIR/vision/install-vision.sh" || die "vision install failed — see vision/README.md"
+else
+  log "Skipping the vision add-on. Add it any time: bash install.sh --vision   (or run vision/install-vision.sh)"
+fi
+
+# ── 8. start.sh / stop.sh into ~/bin ───────────────────────────────────────
 log "Installing start.sh / stop.sh into ~/bin ..."
 mkdir -p "$HOME/bin"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$REPO_DIR/start.sh" "$HOME/bin/start-resolve-ai.sh"
 cp "$REPO_DIR/stop.sh"  "$HOME/bin/stop-resolve-ai.sh"
 chmod +x "$HOME/bin/start-resolve-ai.sh" "$HOME/bin/stop-resolve-ai.sh"
 grep -q 'HOME/bin' ~/.zprofile 2>/dev/null || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zprofile
 ok "Launcher installed (start-resolve-ai.sh / stop-resolve-ai.sh)"
 
-# ── 8. Claude Code permissions for the MCP tools ────────────────────────────
+# ── 9. Claude Code permissions for the MCP tools ────────────────────────────
 # The MCP servers are deliberately guarded (dry-run defaults, confirm tokens,
 # auto-archiving destructive ops), so most users auto-approve their tools.
 # Review ~/.claude/settings.json afterwards.
@@ -118,7 +146,7 @@ print("wrote", path)
 PY
 ok "Permissions set"
 
-# ── 9. Verification ────────────────────────────────────────────────────────
+# ── 10. Verification ───────────────────────────────────────────────────────
 echo
 echo "============================================================"
 echo "  Verification"
@@ -126,6 +154,14 @@ echo "============================================================"
 printf "  splash : "; command -v splash >/dev/null && ok "$(splash --version 2>/dev/null)" || warn missing
 printf "  claude : "; command -v claude >/dev/null && ok "$(claude --version 2>/dev/null)" || warn missing
 printf "  ffmpeg : "; command -v ffmpeg >/dev/null && ok present || warn missing
+if [[ "$VISION" == 1 ]]; then
+  printf "  vision : "
+  if [[ -x "$HOME/resolve-vision-venv312/bin/python" ]] && [[ -f "$HOME/resolve-vision-models/face_landmarker.task" ]]; then
+    ok "$("$HOME/resolve-vision-venv312/bin/python" -c 'import mediapipe,cv2;print("mediapipe",mediapipe.__version__,"· opencv",cv2.__version__,"· YuNet+SFace",hasattr(cv2,"FaceDetectorYN") and hasattr(cv2,"FaceRecognizerSF"))' 2>/dev/null || echo present)"
+  else
+    warn "venv or models missing — re-run: bash vision/install-vision.sh"
+  fi
+fi
 echo
 log "Registered MCP servers:"
 claude mcp list 2>/dev/null || warn "run 'claude mcp list' in a new terminal"
