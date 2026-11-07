@@ -199,6 +199,15 @@ reported), not by producing a bigger count. `compare/merge_compare.py` does the 
 `compare/recog_quality.py` measures recognition separability without labels, and its
 `--align bbox` control is how the alignment result above was derived.
 
+**Two Zoo items I have not installed, listed so they're not rediscovered as news** (unmeasured
+here — that's why they aren't in the installer): `face_recognition_sface_2021dec_int8.onnx`, an
+int8 build of the same recogniser, which would cut the 38.7 MB download and probably speed the
+recognition leg, at an unknown cost to the margin — and on ~55 px faces the margin is already the
+weak part, so it needs `recog_quality.py` numbers before it earns a pin. And
+`models/face_image_quality_assessment_ediffiqa`, a face-image-quality model: a plausible
+pre-filter for "is this box a usable face or a blurry 40 px smudge", which is exactly the failure
+the threshold audit had to do by eye. Check its weight licence the same way as the others.
+
 ## Files
 
 | File | What it is |

@@ -215,12 +215,30 @@ the same day it shipped.
 
 ## Verified stack
 
-Splash 1.6.0 · Qwen3.8-Flash-Next IQ3_S · Claude Code (native installer) ·
-davinci-resolve-mcp 4.19.3 (Python venv + Node 26) · DaVinci Resolve Studio
-21.2.0.6 · Blender 5.2.3 LTS · ffmpeg 9.0.2 · whisper.cpp · macmon ·
+Checked current on 2026-11-07 (how to re-check is below), so these are versions that were
+**latest that day**, not guesses:
+
+Splash 1.6.0 · Qwen3.8-Flash-Next IQ3_S · Claude Code 2.1.319 ·
+davinci-resolve-mcp 4.19.3 (Python venv + Node 26.13.0) · DaVinci Resolve Studio
+**21.2.0.6** (21.2 shipped 2026-11-04) · Blender 5.2.3 LTS · ffmpeg 9.0.2 ·
+whisper.cpp 1.9.5 · macmon 0.11.0 ·
 vision add-on on Python 3.12.16 (mediapipe 1.2.2 · opencv + opencv-contrib 5.0.0.93 ·
-numpy 2.5.4) ·
+numpy 2.5.4 — `pip list --outdated` in that venv returns nothing relevant, so the pins
+are not holding anything back) ·
 macOS 27.2 arm64 · M5 Ultra 64-core GPU, 96 GB unified.
+
+```bash
+# re-check in about a minute, without changing anything
+brew outdated --verbose                                   # formulae behind
+~/resolve-vision-venv312/bin/pip list --outdated          # vision pins
+npm view @brave/brave-search-mcp-server version           # npx-run servers
+# and inside a session: resolve_control(action='mcp_update_status', params={force_check:true})
+```
+
+One thing **not** to blanket-upgrade: the community server's own venv carries its
+dependencies (it pins the `mcp` SDK at 1.30.0 while SDK 2.x exists upstream). A
+`pip install -U` across that venv can break a working server. Update it with the
+upstream path only — `npx -y davinci-resolve-mcp@latest sync` — then reconnect both servers.
 
 ## License
 

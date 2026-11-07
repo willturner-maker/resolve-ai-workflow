@@ -61,6 +61,16 @@ npx -y davinci-resolve-mcp@latest sync     # refreshes Python + Node servers in 
 # then: /mcp → reconnect BOTH davinci-resolve and davinci-resolve-advanced
 ```
 
+Ask the server whether it's behind before syncing — no Resolve connection needed, and it
+reads the same release feed the installer uses:
+`resolve_control(action='mcp_update_status', params={force_check: true})`.
+
+Don't shortcut the sync by upgrading that venv's dependencies by hand. It carries the
+server's own pins — at time of writing it runs the `mcp` SDK at 1.30.0 while SDK 2.x is
+current upstream, alongside its torch/transformers stack — and a blanket `pip install -U`
+in there is the fastest way to break a server that was working. If the sync path fails,
+fix the sync.
+
 ## Permissions
 
 The community server deliberately defaults destructive actions to dry-run and
