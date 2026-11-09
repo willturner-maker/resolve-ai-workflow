@@ -3,6 +3,8 @@
 > This content describes a method for running a local large language model (LLM) on a Mac Studio in conjunction with DaVinci Resolve Studio version 21.1 or later. It is provided for informational purposes only and does not constitute a guarantee of suitability, performance, or fitness for any particular purpose. Nothing herein should be construed as a recommendation to purchase any specific hardware, including an M5 Ultra Mac Studio or any other model.
 >
 > The author assumes no responsibility or liability for any decisions made based on this information, including any purchase of hardware, or for any resulting costs, performance shortfalls, or other consequences. Users are solely responsible for independently evaluating their own requirements and determining the adequacy of any hardware or software configuration for their intended use.
+>
+> This stack is independent of Blackmagic Design, Inco AI, and Anthropic; those names appear only because the tools are used.
 
 # DaVinci Resolve + Local AI Workstation
 
@@ -44,12 +46,20 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 | **Official ResolveMCP** (bundled in Resolve Studio 21.1+) | Blackmagic's own 18-tool surface: canonical and versioned with the app; useful cross-check and fallback. |
 | **Brave Search MCP** (opt-in: official `@brave/brave-search-mcp-server`, MIT) | The research leg — the only one that costs money: live fact-checks no model can know, like whether a new Resolve build changed an API behaviour or whether an upstream release has wheels on PyPI yet. Priced **$5 per 1,000 queries**, with **$5 of free credit applied automatically every month** (~1,000 free queries; card required at signup even for free use). The only leg where queries leave the machine — search strings get the same scrubbing discipline as commit messages. Setup, pricing details and a plan-bound-key gotcha in [`mcp/mcp-config.md`](mcp/mcp-config.md). |
 | **splash-dashboard** ([rickhuizinga/splash-dashboard](https://github.com/rickhuizinga/splash-dashboard)) | Live engine observability on :8280: KV residency, prefix-cache hit rate, admission pacing, decode batch widths — the instrument panel that turns "the model feels slow" into numbers. |
-| **Prometheus + Grafana** (opt-in; `--no-metrics` to skip) | History leg: the engine serves native Prometheus text at `/metrics` (~130 `splash_*` series), Prometheus scrapes it at 15 s, and a provisioned Grafana dashboard (:3000) graphs scheduler/admission states, decode batch-width mix, KV pages, SSD-cache IO and TTFT/ITL quantiles with 15 days of retention. Provisioning is file-based, so a fresh machine reproduces it; the one gotcha: Grafana 13 renamed its provisioning ini keys — `[paths] provisioning = …` **plus** `permitted_provisioning_paths`, or provisioning silently loads nothing. |
+| **Prometheus + Grafana** (opt-in; not installed by `install.sh`) | History leg: the engine serves native Prometheus text at `/metrics` (~130 `splash_*` series). If you have already installed and provisioned Prometheus + Grafana, the launcher starts them (`--no-metrics` skips). A fresh machine does **not** get them automatically — one-time setup is required (`start.sh` header comments spell out the Grafana 13 provisioning gotcha: `[paths] provisioning = …` **plus** `permitted_provisioning_paths`, or provisioning silently loads nothing). Until then the live dashboard on :8280 is sufficient. |
 | **Blender (LTS, at `/Applications`)** | Content forge: 3D title stings, extruded logos, generated media — scripted headless (`--background --python`), rendered transparent-EXR, imported into Resolve as sequence clips with straight alpha. See [`blender/`](blender/). |
 | **ffmpeg / ffprobe** (brew) | The verification layer: every render gets probed (frame count, codecs, duration) before it's trusted; sequence encoding; frame extraction for visual checks. |
 | **whisper.cpp / whisper CLI** (brew + MCP-integrated) | Local transcription; the MCP server also feeds transcripts into timeline subtitle tracks and cut-candidate proposals. |
 | **Vision add-on** (opt-in: `install.sh --vision`, see [`vision/`](vision/)) | Face-level signals off Resolve: OpenCV YuNet + SFace for detection/identity and MediaPipe for landmarks, in their own Python 3.12 venv. 90 faces detected on one 8.1K frame in 0.29 s (0.96 s with embeddings, 0.0 s model init), 83 of them landed 478 landmarks + 52 ARKit blendshapes in another 0.3 s — so "whose mouth was open during this solo" becomes a JSON query. Opt-in because it's a second venv (~560 MB + ~52 MB models); every weight it installs has a stated licence. |
 | **macmon** (brew) | Zero-overhead Apple GPU/memory/ANE telemetry in a second terminal — watch unified-memory pressure while Resolve renders and the engine serves, which is how the 56 GB memory budget below was chosen. |
+
+### Which Resolve MCP to use
+
+- **Day-to-day agent work** (timeline edits, markers, Fusion, render queue, verified outputs): community `davinci-resolve`. It has the dry-run / confirm-token / auto-archive guardrails.
+- **Closed-project forensics** (Project.db, .drx grades, DRT, conform without Resolve open): `davinci-resolve-advanced`.
+- **Canonical Blackmagic surface / cross-check / fallback**: official `DaVinci Resolve` (ships inside Studio 21.1+).
+
+Most sessions use the community server as primary and keep the official one registered as a safety net. Details and registration steps are in [`mcp/mcp-config.md`](mcp/mcp-config.md).
 
 ## Quick start
 
@@ -57,8 +67,11 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 
 - Apple Silicon Mac, ideally ≥48 GB unified memory (tuned here on 96 GB;
   the engine prints its own recommended working set on smaller ones).
-- **DaVinci Resolve Studio** (external scripting is Studio-only; the free
-  edition reaches the community server via the in-app bridge on 21.0.x).
+- **DaVinci Resolve Studio** required for external scripting (the path this
+  launcher and the stdio MCP servers use). The free edition reaches the
+  community server only via the in-app bridge (Workspace ▸ Scripts) on 21.0.x;
+  Resolve 21.1 moved Python scripting to Studio, so from 21.1 on even that
+  bridge path is gone. The official Blackmagic MCP always needs Studio.
 - macOS with Homebrew; Python 3.11+; Node 20+.
 
 ```bash
@@ -66,16 +79,46 @@ git clone https://github.com/willturner-maker/resolve-ai-workflow.git
 cd resolve-ai-workflow
 bash install.sh            # everything below, wired into Claude Code
 bash install.sh --vision   # same, plus the opt-in face/mouth layer (vision/README.md)
-start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → Claude Code (one command)
+
+# After install, open a NEW terminal — the launchers arrive on PATH as:
+start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → Claude Code
 stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
+
+# From the clone, without relying on PATH:
+bash start.sh
+bash stop.sh
 ```
 
-First start downloads the model (tens of GB) into Splash's cache; after that it's
-seconds. The launcher's memory numbers are tunable without editing:
+First start downloads the model (tens of GB) into Splash's cache and can take
+several minutes. Subsequent starts are seconds once the weights are cached.
+
+The launcher's memory numbers are tunable without editing the script. Defaults
+are sized for a 96 GB machine running Resolve concurrently; smaller machines
+should lower them (see table below).
 
 ```bash
-MAX_MEMORY=32G MAX_CACHE_DISK=64G EXTERNAL_CACHE="/Volumes/YourSSD/splash-cache" start-resolve-ai.sh
+# example for a 64 GB machine
+MAX_MEMORY=32G MAX_CACHE_DISK=64G start-resolve-ai.sh
+
+# or with the prefix cache on a fast external SSD
+MAX_MEMORY=56G MAX_CACHE_DISK=128G EXTERNAL_CACHE="/Volumes/YourSSD/splash-cache" start-resolve-ai.sh
 ```
+
+**Suggested starting points by machine size** (the engine also prints its own
+recommended working set at startup):
+
+| Unified memory | Suggested `MAX_MEMORY` | Suggested `MAX_CACHE_DISK` | Notes |
+|---|---|---|---|
+| 96 GB | 56G (default) | 128G (default) | Measured on M5 Ultra + Resolve |
+| 64 GB | 32–40G | 64G | Leave headroom for Resolve |
+| 48 GB | 24–28G | 32–64G | Watch system pressure; engine recommendation is authoritative |
+
+Rough disk use on first run:
+
+- Model weights (Splash cache): tens of GB (one-time download)
+- Persistent prefix cache: up to the `MAX_CACHE_DISK` value (default 128G; lives under `~/Library/Caches/Splash/` unless `EXTERNAL_CACHE` points elsewhere)
+- Vision add-on (opt-in): ~560 MB venv + ~52 MB models
+- Blender: separate application install
 
 - `start.sh` / `stop.sh` — the exact scripts this workstation runs (with the
   memory-tuning log in the header comments: why 56 GB working set / 128 GB disk
@@ -204,6 +247,9 @@ the same day it shipped.
    wires both hooks; `--all` audits the whole tree. A property description beats a name:
    "8128×4288 HEVC Main 10, 56 min" tells a reader more than a camera-generated filename
    ever did — and if you try to quote such a filename here, the guard refuses the commit.
+   A fresh clone does **not** receive the deny list or the hooks: run
+   `bash tools/precommit-scan.sh --install` and maintain your own terms in
+   `.git/info/precommit-terms` if you want the same scrubbing.
 7. **Identity data isn't publishable** — the scan blocks *names*; face geometry and face
    embeddings need the harder rule: never export them at all. Vision probes default to
    boxes + scores + scalar mouth state, write vectors only when you pass `--save-embeddings`,
