@@ -21,6 +21,11 @@
 
 set -euo pipefail
 
+# Pin Homebrew into PATH even when invoked from a shell that never sourced
+# the login profile; without it the metrics leg below can mis-detect
+# installed formulae and brew's own errors stay invisible.
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # ── Configuration ──────────────────────────────────────────────────
 MODEL_FLASH="ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF:IQ3_S"
 MODEL_27B="unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M"   # adjust if you use a different quant
@@ -165,11 +170,16 @@ if [[ $OPEN_METRICS -eq 1 ]] && command -v brew >/dev/null 2>&1; then
   for svc in prometheus grafana; do
     if brew services info "$svc" --json 2>/dev/null | grep -q '"running": *true'; then
       info "$svc already running."
-    elif brew list --formula 2>/dev/null | grep -qx "$svc"; then
-      info "Starting $svc..."
-      brew services start "$svc" >/dev/null 2>&1 || warn "brew services start $svc failed"
+    elif formulas="$(brew list --formula 2>/dev/null)"; then
+      if grep -qx "$svc" <<<"$formulas"; then
+        info "Starting $svc..."
+        brew services start "$svc" || warn "brew services start $svc failed (see brew output above)"
+      else
+        info "$svc not installed — skipping metrics leg (brew install $svc to enable)."
+      fi
     else
-      info "$svc not installed — skipping metrics leg (brew install $svc to enable)."
+      warn "brew list FAILED — can't tell whether $svc is installed; skipping it."
+      warn "If this recurs, run 'brew doctor'."
     fi
   done
   sleep 2
