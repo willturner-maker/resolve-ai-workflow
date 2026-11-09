@@ -35,6 +35,8 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+*Data never leaves the machine except through the optional Brave Search leg.*
+
 ## What each piece brings
 
 | Tool | Benefit |
@@ -60,6 +62,8 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 - **Canonical Blackmagic surface / cross-check / fallback**: official `DaVinci Resolve` (ships inside Studio 21.1+).
 
 Most sessions use the community server as primary and keep the official one registered as a safety net. Details and registration steps are in [`mcp/mcp-config.md`](mcp/mcp-config.md).
+
+> **Do not** run a blanket `pip install -U` inside the community server's venv — it carries its own pins (`mcp` SDK 1.30.0 plus a torch/transformers stack). The only update path is `npx -y davinci-resolve-mcp@latest sync`; see [Verified stack](#verified-stack).
 
 ## Quick start
 
@@ -88,6 +92,23 @@ stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
 bash start.sh
 bash stop.sh
 ```
+
+### First-run checklist
+
+1. `bash install.sh` finishes and prints the registered MCP servers
+   (the three Resolve names — plus `brave-search` if you opted in).
+2. Open a **new** terminal so PATH picks up the launchers.
+3. `start-resolve-ai.sh` — first start downloads the model; later starts
+   begin in seconds.
+4. The dashboard comes up on :8280, Resolve launches, then Claude Code opens.
+5. Inside Claude Code: `/mcp` → confirm the three Resolve servers are connected.
+6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
+
+**If the engine never becomes ready:** `tail ~/Library/Logs/splash/splash.err.log`
+(the dashboard leg logs to `~/splash-dashboard.log`).
+**If MCP servers are missing:** re-run `npx -y davinci-resolve-mcp@latest setup
+--clients claude-code`, then `/mcp` to reconnect.
+**If memory pressure turns red:** lower `MAX_MEMORY` and restart (sizing table below).
 
 First start downloads the model (tens of GB) into Splash's cache and can take
 several minutes. Subsequent starts are seconds once the weights are cached.
