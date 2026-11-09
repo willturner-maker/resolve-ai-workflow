@@ -1,3 +1,9 @@
+> **Disclaimer**
+>
+> This content describes a method for running a local large language model (LLM) on a Mac Studio in conjunction with DaVinci Resolve Studio version 21.1 or later. It is provided for informational purposes only and does not constitute a guarantee of suitability, performance, or fitness for any particular purpose. Nothing herein should be construed as a recommendation to purchase any specific hardware, including an M5 Ultra Mac Studio or any other model.
+>
+> The author assumes no responsibility or liability for any decisions made based on this information, including any purchase of hardware, or for any resulting costs, performance shortfalls, or other consequences. Users are solely responsible for independently evaluating their own requirements and determining the adequacy of any hardware or software configuration for their intended use.
+
 # DaVinci Resolve + Local AI Workstation
 
 A complete, scripted post-production workstation: **Claude Code driven by a
