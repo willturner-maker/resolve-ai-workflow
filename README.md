@@ -37,6 +37,18 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 
 *Data never leaves the machine except through the optional Brave Search leg.*
 
+## Contents
+
+- [What each piece brings](#what-each-piece-brings)
+- [Quick start](#quick-start)
+- [What agentic control actually does here](#what-agentic-control-actually-does-here)
+- [What the vision layer gets you](#what-the-vision-layer-gets-you-opt-in)
+- [Benchmarks (measured, reproducible, honest)](#benchmarks-measured-reproducible-honest)
+- [Operating practices that keep it trustworthy](#operating-practices-that-keep-it-trustworthy)
+- [Troubleshooting quick hits](#troubleshooting-quick-hits)
+- [Verified stack](#verified-stack)
+- [License](#license)
+
 ## What each piece brings
 
 | Tool | Benefit |
@@ -76,7 +88,13 @@ Most sessions use the community server as primary and keep the official one regi
   community server only via the in-app bridge (Workspace ▸ Scripts) on 21.0.x;
   Resolve 21.1 moved Python scripting to Studio, so from 21.1 on even that
   bridge path is gone. The official Blackmagic MCP always needs Studio.
+- In Resolve Studio set **Preferences → System → General → External scripting
+  using** to **Local**, then restart Resolve if it is already open. Without
+  this the community MCP servers cannot connect.
 - macOS with Homebrew; Python 3.11+; Node 20+.
+- Optional Blender LTS: `brew install --cask blender` (or download from
+  blender.org). `install.sh` checks for it and prints this hint, but never
+  installs it itself.
 
 ```bash
 git clone https://github.com/willturner-maker/resolve-ai-workflow.git
@@ -93,6 +111,14 @@ bash start.sh
 bash stop.sh
 ```
 
+> **First start:** the model download is tens of GB and can take several
+> minutes; subsequent starts take seconds. Watch the terminal until the
+> dashboard URL appears and Claude Code opens.
+
+> **Disk:** the model itself is a one-time download. The persistent prefix
+> cache can grow up to `MAX_CACHE_DISK` (default 128 G). An external SSD is
+> recommended for the cache — see the `EXTERNAL_CACHE` variable in `start.sh`.
+
 ### First-run checklist
 
 1. `bash install.sh` finishes and prints the registered MCP servers
@@ -103,6 +129,9 @@ bash stop.sh
 4. The dashboard comes up on :8280, Resolve launches, then Claude Code opens.
 5. Inside Claude Code: `/mcp` → confirm the three Resolve servers are connected.
 6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
+7. Confirm the MCP path with a read-only probe — in Claude Code ask:
+   `List the timelines in the current Resolve project (read-only)`. A reply
+   naming your timelines means the whole chain (engine → MCP → Resolve) works.
 
 **If the engine never becomes ready:** `tail ~/Library/Logs/splash/splash.err.log`
 (the dashboard leg logs to `~/splash-dashboard.log`).
@@ -140,6 +169,11 @@ Rough disk use on first run:
 - Persistent prefix cache: up to the `MAX_CACHE_DISK` value (default 128G; lives under `~/Library/Caches/Splash/` unless `EXTERNAL_CACHE` points elsewhere)
 - Vision add-on (opt-in): ~560 MB venv + ~52 MB models
 - Blender: separate application install
+
+**Optional hardening:** `bash tools/precommit-scan.sh --install` enables the
+local-string guard described under
+[Operating practices](#operating-practices-that-keep-it-trustworthy) — worth
+wiring up before you commit anything of your own into a clone.
 
 - `start.sh` / `stop.sh` — the exact scripts this workstation runs (with the
   memory-tuning log in the header comments: why 56 GB working set / 128 GB disk
