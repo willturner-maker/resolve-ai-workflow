@@ -91,7 +91,9 @@ Most sessions use the community server as primary and keep the official one regi
 - In Resolve Studio set **Preferences → System → General → External scripting
   using** to **Local**, then restart Resolve if it is already open. Without
   this the community MCP servers cannot connect.
-- macOS with Homebrew; Python 3.11+; Node 20+.
+- macOS with Homebrew; Python 3.11+; Node 20+. `install.sh` stops and tells
+  you if Homebrew is missing; it installs Node via Homebrew when absent, but
+  expects a Python 3.11+ already available (the MCP installer requires it).
 - Optional Blender LTS: `brew install --cask blender` (or download from
   blender.org). `install.sh` checks for it and prints this hint, but never
   installs it itself.
@@ -130,14 +132,20 @@ bash stop.sh
 5. Inside Claude Code: `/mcp` → confirm the three Resolve servers are connected.
 6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
 7. Confirm the MCP path with a read-only probe — in Claude Code ask:
-   `List the timelines in the current Resolve project (read-only)`. A reply
-   naming your timelines means the whole chain (engine → MCP → Resolve) works.
+   `List the timelines in the current Resolve project (read-only)`. (Open or
+   create any project in Resolve first, so the probe has timelines to list.)
+   A reply naming your timelines means the whole chain
+   (engine → MCP → Resolve) works.
 
 **If the engine never becomes ready:** `tail ~/Library/Logs/splash/splash.err.log`
 (the dashboard leg logs to `~/splash-dashboard.log`).
 **If MCP servers are missing:** re-run `npx -y davinci-resolve-mcp@latest setup
 --clients claude-code`, then `/mcp` to reconnect.
 **If memory pressure turns red:** lower `MAX_MEMORY` and restart (sizing table below).
+
+> The dashboard at `http://127.0.0.1:8280` shows engine status, KV residency,
+> and cache hit rate — the fastest way to confirm Splash is healthy before
+> talking to the agent.
 
 First start downloads the model (tens of GB) into Splash's cache and can take
 several minutes. Subsequent starts are seconds once the weights are cached.
@@ -324,6 +332,11 @@ the same day it shipped.
 - Vision probe returns 0 faces on a big frame → you're asking a detector to see a 1 % face. Run at native resolution (`--tile auto`), then let stage 2 crop; see the two-stage rule in `vision/README.md`.
 - Server's `strata_run(analyzers=['face'])` says it can't run → mediapipe/opencv belong to the *server* venv there: `bash vision/install-vision.sh --mcp-server-venv <server venv>`, then `/mcp` → reconnect.
 - Brave MCP connects but every search returns nothing → the key belongs to the **Answers** plan, not **Search** — keys are plan-bound; see `mcp/mcp-config.md`.
+
+**Safe update:** `npx -y davinci-resolve-mcp@latest sync`, then `/mcp` →
+reconnect **both** servers. When a major version changed, re-run a benchmark
+before trusting the numbers. Never `pip install -U` inside the community
+server's venv — it carries its own pins.
 
 ## Verified stack
 
