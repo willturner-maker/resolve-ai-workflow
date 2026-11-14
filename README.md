@@ -128,12 +128,15 @@ bash stop.sh
 2. Open a **new** terminal so PATH picks up the launchers.
 3. `start-resolve-ai.sh` — first start downloads the model; later starts
    begin in seconds.
-4. The dashboard comes up on :8280, Resolve launches, then Claude Code opens.
+4. The dashboard comes up on :8280, then Claude Code opens. Resolve is
+   **not** launched: the MCP starts it headless (`-nogui`) on the first
+   Resolve tool call. To open the GUI at boot instead, prefix the start
+   with `LAUNCH_RESOLVE_GUI=1`.
 5. Inside Claude Code: `/mcp` → confirm the three Resolve servers are connected.
 6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
 7. Confirm the MCP path with a read-only probe — in Claude Code ask:
-   `List the timelines in the current Resolve project (read-only)`. (Open or
-   create any project in Resolve first, so the probe has timelines to list.)
+   `List the timelines in the current Resolve project (read-only)`. (The
+   probe needs a project open; the agent can create or load one headless.)
    A reply naming your timelines means the whole chain
    (engine → MCP → Resolve) works.
 

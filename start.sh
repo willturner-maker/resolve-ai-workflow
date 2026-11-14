@@ -71,7 +71,7 @@ for arg in "$@"; do
     --no-metrics) OPEN_METRICS=0 ;;
     -h|--help)
       echo "Usage: $0 [--27b] [--no-macmon] [--no-metrics]"
-      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path"
+      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path LAUNCH_RESOLVE_GUI=1"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
   esac
@@ -191,13 +191,23 @@ if [[ $OPEN_METRICS -eq 1 ]] && command -v brew >/dev/null 2>&1; then
     || warn "Grafana not answering on :3000 yet — first start can take ~10 s."
 fi
 
-# ── 3. Launch DaVinci Resolve (skip if already running) ────────────
-if pgrep -x "Resolve" >/dev/null 2>&1; then
-  info "DaVinci Resolve already running."
+# ── 3. DaVinci Resolve: NOT auto-launched (default) ────────────────
+# Headless Resolve is the default host: the MCP server launches it with
+# -nogui on the first tool call that needs it, so booting the GUI here
+# only races that. Switching to the GUI is a deliberate handoff (empty
+# render queue, nothing rendering, no in-flight MCP mutations). Opt in
+# to a GUI launch at boot with:  LAUNCH_RESOLVE_GUI=1 ./start-resolve-ai.sh
+if [[ ${LAUNCH_RESOLVE_GUI:-0} -eq 1 ]]; then
+  if pgrep -x "Resolve" >/dev/null 2>&1; then
+    info "DaVinci Resolve already running."
+  else
+    info "Opening DaVinci Resolve (LAUNCH_RESOLVE_GUI=1)..."
+    open -a "DaVinci Resolve" 2>/dev/null || open -a "DaVinci Resolve Studio" 2>/dev/null || warn "Could not open DaVinci Resolve"
+    sleep 3
+  fi
 else
-  info "Opening DaVinci Resolve..."
-  open -a "DaVinci Resolve" 2>/dev/null || open -a "DaVinci Resolve Studio" 2>/dev/null || warn "Could not open DaVinci Resolve"
-  sleep 3
+  info "DaVinci Resolve: not launching (the MCP starts headless on demand;"
+  info "  LAUNCH_RESOLVE_GUI=1 opens the GUI at boot)."
 fi
 open "http://127.0.0.1:${DASH_PORT}" 2>/dev/null || true
 
