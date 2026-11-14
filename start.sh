@@ -10,8 +10,11 @@
 #                     keeping the KV pool ~10 GB (~770k tokens, 3x the 262k ctx).
 #                     Smaller machines: try 24–32 GB; the engine prints its own
 #                     recommended working set at startup.
-#   MAX_CACHE_DISK=128G — the 64 G prefix cache saturated and started evicting
-#                     warm prefixes; disk cache is cheap, RAM is not.
+#   MAX_CACHE_DISK=256G — 64 G saturated and started evicting warm prefixes;
+#                     so did 128 G, in about two weeks of sustained agentic
+#                     use (tier hits quota -> oldest-first eviction, a few
+#                     percent of requests re-prefill). Disk cache is cheap,
+#                     RAM is not; size it to your volume's free space.
 #   --expert-memory auto — splash >= 1.6.0 elastic expert store; a fixed size
 #                     disables elasticity. Keep 'auto'.
 #   THINKING_BUDGET=16384 — caps runaway deliberation so requests still answer.
@@ -33,7 +36,7 @@ MODEL_27B="unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M"   # adjust if you use a different
 SPLASH_PORT=8000
 DASH_PORT=8280
 
-MAX_CACHE_DISK="${MAX_CACHE_DISK:-128G}"
+MAX_CACHE_DISK="${MAX_CACHE_DISK:-256G}"
 PERSISTENT_CACHE=1
 MAX_MEMORY="${MAX_MEMORY:-56G}"
 REASONING_EFFORT="xhigh"    # only for requests that set none (the Chat UI); Claude Code sets its own
@@ -68,7 +71,7 @@ for arg in "$@"; do
     --no-metrics) OPEN_METRICS=0 ;;
     -h|--help)
       echo "Usage: $0 [--27b] [--no-macmon] [--no-metrics]"
-      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=128G EXTERNAL_CACHE=/path"
+      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
   esac
