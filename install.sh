@@ -174,11 +174,11 @@ fi
 # ── 9. start.sh / stop.sh into ~/bin ───────────────────────────────────────
 log "Installing start.sh / stop.sh into ~/bin ..."
 mkdir -p "$HOME/bin"
-cp "$REPO_DIR/start.sh" "$HOME/bin/start-resolve-ai.sh"
-cp "$REPO_DIR/stop.sh"  "$HOME/bin/stop-resolve-ai.sh"
-chmod +x "$HOME/bin/start-resolve-ai.sh" "$HOME/bin/stop-resolve-ai.sh"
+cp "$REPO_DIR/start.sh" "$HOME/bin/start.sh"
+cp "$REPO_DIR/stop.sh"  "$HOME/bin/stop.sh"
+chmod +x "$HOME/bin/start.sh" "$HOME/bin/stop.sh"
 grep -q 'HOME/bin' ~/.zprofile 2>/dev/null || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zprofile
-ok "Launcher installed (start-resolve-ai.sh / stop-resolve-ai.sh)"
+ok "Launcher installed (start.sh / stop.sh in ~/bin)"
 
 # ── 10. OpenCode config for Splash / Qwen + MCP permissions ────────────────
 # MERGE-ONLY: preserves existing providers, MCP servers (the community installer
@@ -238,11 +238,11 @@ log "Registered MCP servers:"
 opencode mcp list 2>/dev/null || warn "run 'opencode mcp list' in a new terminal"
 echo
 echo "Next steps:"
-echo "  1. Open a NEW terminal, then:  start-resolve-ai.sh"
+echo "  1. Open a NEW terminal, then:  start.sh"
 echo "     (first run downloads the model — tens of GB; keep the terminal open)"
 echo "  2. Dashboard:  http://127.0.0.1:8280   Engine chat UI: http://127.0.0.1:8000"
 echo "  3. Inside OpenCode: /models  →  confirm Splash/Qwen is selected"
 echo "  4. Ask: 'what is the current timeline and its items?' — expect read-only answers."
-echo "  5. Stop cleanly:  stop-resolve-ai.sh"
+echo "  5. Stop cleanly:  stop.sh"
 echo
 echo "Why OpenCode and not Claude Code? See HARNESS-MIGRATION.md (2026-11-16 benchmark evidence)."

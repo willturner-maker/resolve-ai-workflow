@@ -1,5 +1,5 @@
 #!/bin/bash
-# start-resolve-ai.sh
+# start.sh (installed as ~/bin/start.sh, linked at ~/start.sh)
 # Starts Splash (Qwen3.8-Flash-Next IQ3_S) + dashboard + OpenCode
 # DaVinci Resolve is NOT started automatically — OpenCode launches it on demand
 # via MCP when a task needs it. Optional fallback: --27b
@@ -27,7 +27,7 @@
 #   THINKING_BUDGET=16384 — caps runaway deliberation so requests still answer.
 #
 # One-off overrides without editing:
-#   MAX_MEMORY=32G MAX_CACHE_DISK=64G ./start-resolve-ai.sh
+#   MAX_MEMORY=32G MAX_CACHE_DISK=64G ./start.sh
 
 set -euo pipefail
 
@@ -78,7 +78,7 @@ SPLASH_PID_FILE="${HOME}/.splash.pid"
 # OpenCode's project (and therefore which opencode.json applies — MCP permission
 # defaults, the LSP plugin) is resolved from the cwd at handoff. The dashboard leg
 # below cds into DASH_DIR and never cd's back, so the handoff explicitly cds here.
-# Override:  RESOLVE_AI_PROJECT=~/benchmarks start-resolve-ai.sh
+# Override:  RESOLVE_AI_PROJECT=~/benchmarks start.sh
 PROJECT_DIR="${RESOLVE_AI_PROJECT:-$HOME/resolve-ai-workflow}"
 
 # ── Parse flags ────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ fi
 # -nogui on the first tool call that needs it, so booting the GUI here
 # only races that. Switching to the GUI is a deliberate handoff (empty
 # render queue, nothing rendering, no in-flight MCP mutations). Opt in
-# to a GUI launch at boot with:  LAUNCH_RESOLVE_GUI=1 ./start-resolve-ai.sh
+# to a GUI launch at boot with:  LAUNCH_RESOLVE_GUI=1 ./start.sh
 if [[ ${LAUNCH_RESOLVE_GUI:-0} -eq 1 ]]; then
   if pgrep -x "Resolve" >/dev/null 2>&1; then
     info "DaVinci Resolve already running."

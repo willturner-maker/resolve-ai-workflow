@@ -107,8 +107,8 @@ bash install.sh --vision   # same, plus the opt-in face/mouth layer (vision/READ
 bash install.sh --lsp      # + LSP tool & post-edit diagnostics for OpenCode V2 (project-scoped)
 
 # After install, open a NEW terminal — the launchers arrive on PATH as:
-start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → OpenCode
-stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
+start.sh                   # Splash → dashboard → metrics (opt) → Resolve → OpenCode
+stop.sh                    # clean shutdown (leaves Resolve alone)
 
 # From the clone, without relying on PATH:
 bash start.sh
@@ -133,7 +133,7 @@ bash start.sh --low        # or --high; also accepts --effort=<value> / REASONIN
 1. `bash install.sh` finishes and prints the registered MCP servers
    (the three Resolve names — plus `brave-search` if you opted in).
 2. Open a **new** terminal so PATH picks up the launchers.
-3. `start-resolve-ai.sh` — first start downloads the model; later starts
+3. `start.sh` — first start downloads the model; later starts
    begin in seconds.
 4. The dashboard comes up on :8280, then OpenCode opens. Resolve is
    **not** launched: the MCP starts it headless (`-nogui`) on the first
@@ -166,10 +166,10 @@ should lower them (see table below).
 
 ```bash
 # example for a 64 GB machine
-MAX_MEMORY=32G MAX_CACHE_DISK=64G start-resolve-ai.sh
+MAX_MEMORY=32G MAX_CACHE_DISK=64G start.sh
 
 # or with the prefix cache on a fast external SSD
-MAX_MEMORY=56G MAX_CACHE_DISK=128G EXTERNAL_CACHE="/Volumes/YourSSD/splash-cache" start-resolve-ai.sh
+MAX_MEMORY=56G MAX_CACHE_DISK=128G EXTERNAL_CACHE="/Volumes/YourSSD/splash-cache" start.sh
 ```
 
 **Suggested starting points by machine size** (the engine also prints its own
@@ -383,7 +383,7 @@ the same day it shipped.
 - MCP behaves like the old version after an update → the running process predates
   the sync; `/mcp` → reconnect **both** servers; proof is the tool count, not the version string.
 - Engine not answering → `tail -f ~/Library/Logs/splash/splash.err.log`; first run downloads the model.
-- Port 8000 busy → the launcher kills prior instances by pidfile/name; `stop-resolve-ai.sh` first.
+- Port 8000 busy → the launcher kills prior instances by pidfile/name; `stop.sh` first.
 - Resolve free edition → Workspace ▸ Scripts ▸ `resolve_bridge`; the community server auto-uses it on 21.0.x.
 - Vision probe returns 0 faces on a big frame → you're asking a detector to see a 1 % face. Run at native resolution (`--tile auto`), then let stage 2 crop; see the two-stage rule in `vision/README.md`.
 - Server's `strata_run(analyzers=['face'])` says it can't run → mediapipe/opencv belong to the *server* venv there: `bash vision/install-vision.sh --mcp-server-venv <server venv>`, then `/mcp` → reconnect.

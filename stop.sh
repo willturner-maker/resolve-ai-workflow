@@ -1,5 +1,5 @@
 #!/bin/bash
-# stop-resolve-ai.sh
+# stop.sh (installed as ~/bin/stop.sh, linked at ~/stop.sh)
 # Cleanly shuts down Splash, the dashboard, and related processes
 
 set -euo pipefail
