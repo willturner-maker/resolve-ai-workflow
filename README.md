@@ -54,7 +54,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 
 | Tool | Benefit |
 |---|---|
-| **Splash** ([incoai/tap](https://github.com/incoai/splash), brew) | Local LLM engine serving `Qwen3.8-Flash-Next IQ3_S` (262k context, GGUF/IQ3 quant) behind OpenAI *and* Anthropic-compatible APIs. Persistent disk prefix-cache means fresh agent sessions reuse ~20–45k cached tokens each. TTFT ~200 ms warm; single-stream decode ~170 tok/s; aggregate plateau ~375 tok/s under concurrency. Also hosts a built-in chat UI on :8000. |
+| **Splash 1.7.0** ([incoai/tap](https://github.com/incoai/splash), brew) | Local LLM engine serving `Qwen3.8-Flash-Next IQ3_S` (262k context, GGUF/IQ3 quant) behind OpenAI *and* Anthropic-compatible APIs. Persistent disk prefix-cache reuses a fresh session's shared prefix at ~99.7% (measured 2026-11-17: 9,664 of 9,690 tokens served to a *different* session, 125 ms; production agent prefixes run ~20–45k by that same path). On 1.7.0: **TTFT 110–118 ms warm** / 291 ms cold, ladder single-stream **219.8 tok/s** (probe decode ~170), **aggregate plateau 479–494 tok/s** across widths 8→32 with the peak at width 4 (526.5). Also hosts a built-in chat UI on :8000. |
 | **OpenCode** ([opencode.ai](https://opencode.ai)) | The agentic operator. Reads the timeline, plans edits, executes them through MCP with dry-run/confirm-token discipline, verifies via read-backs, renders, grades its own output with ffprobe. Nothing leaves the machine. Replaced Claude Code on 2026-11-16 on measured evidence — see `HARNESS-MIGRATION.md`. |
 | **Community `davinci-resolve` MCP** ([samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp)) | The hands: ~36 action-dispatch tools over the whole scripting API — media pool, timelines, ripple edits with dry-run plans, markers, Fusion comps, render queue + **verified outputs** (ffprobe cross-check of every render), and a live `api_truth` knowledge base of verified Resolve API quirks. Destructive ops auto-archive timelines first. |
 | **`davinci-resolve-advanced` MCP** (same project) | The forensic layer: closed-`Project.db` reads/writes (captions, speed ramps), `.drx` grade XML, DRT timelines, FCPXML/EDL/AAF conform, deliverable-QC specs — all without Resolve running. |
@@ -172,14 +172,14 @@ recommended working set at startup):
 
 | Unified memory | Suggested `MAX_MEMORY` | Suggested `MAX_CACHE_DISK` | Notes |
 |---|---|---|---|
-| 96 GB | 56G (default) | 128G (default) | Measured on M5 Ultra + Resolve |
+| 96 GB | 56G (default) | 256G (default) | Measured on M5 Ultra + Resolve — 256G is the value since 64G saturated and started evicting warm prefixes |
 | 64 GB | 32–40G | 64G | Leave headroom for Resolve |
 | 48 GB | 24–28G | 32–64G | Watch system pressure; engine recommendation is authoritative |
 
 Rough disk use on first run:
 
 - Model weights (Splash cache): tens of GB (one-time download)
-- Persistent prefix cache: up to the `MAX_CACHE_DISK` value (default 128G; lives under `~/Library/Caches/Splash/` unless `EXTERNAL_CACHE` points elsewhere)
+- Persistent prefix cache: up to the `MAX_CACHE_DISK` value (default 256G; lives under `~/Library/Caches/Splash/` unless `EXTERNAL_CACHE` points elsewhere)
 - Vision add-on (opt-in): ~560 MB venv + ~52 MB models
 - Blender: separate application install
 
@@ -324,9 +324,12 @@ JSONL at **https://github.com/willturner-maker/benchmarks**. Headlines:
   render-job prepare ~130 ms, output verification ~40 ms, timeline-set ~100 ms.
 - **Render probe** (121-frame UHD H.264 from an 8K source): cold ~3.1 s,
   warm ~1.2–1.3 s (~93–100 fps), stable run to run single-tenant.
-- **Engine**: TTFT 201 ms warm / 380 ms cold; decode plateau ~375 tok/s from
-  width 4 through 32 (2.5× single stream — a wall, not a cliff); KV admission
-  paces gracefully at 4.4× the resident KV budget without a single suspension.
+- **Engine** (Splash 1.7.0, re-measured 2026-11-17 across three passes): TTFT
+  **110–118 ms warm** / 291 ms cold; ladder w1 **219.8 tok/s**, plateau **479–494 tok/s**
+  across widths 8→32 with the aggregate peak back at **width 4** (526.5); KV admission
+  still paces gracefully — **zero suspensions at 611k prompt tokens** (3.93× a
+  155,648-token resident budget, itself +18.8% on 1.6.1) with the quietest demote path
+  on record (+11 blocks total, zero spill).
 
 Version-to-version reruns are scripted (`ladder_kv.py` runs both concurrency
 methods in one pass), which is how upgrades get trusted — including the time an
@@ -383,6 +386,12 @@ reconnect **both** servers. When a major version changed, re-run a benchmark
 before trusting the numbers. Never `pip install -U` inside the community
 server's venv — it carries its own pins.
 
+**Splash upgrades need a warm-up pass, not just a restart.** A minor Splash bump can reset the
+engine's persistent prefix cache (1.7.0 did: `took back 0 restore points … 0 MiB` in the startup
+log), which silently depresses every performance number until the cache refills. Re-run the suite
+once unscored, then read `/status`: when `cache.cold_misses` stops moving and `hit_rate` is back
+above ~0.98, the engine is warm and the next pass is the one you publish.
+
 ## Verified stack
 
 Checked current on 2026-11-07 and **re-verified 2026-11-09** by re-running every
@@ -418,6 +427,31 @@ install is current.
 The one caveat worth knowing about a self-updating server: an MCP process that was already
 running keeps its pre-update code in memory (check `ps -o lstart` against the install
 directory's mtime), so a restart — not just a wait — is what picks up the new version.
+
+**2026-11-17 — Splash 1.6.1 → 1.7.0, and the performance numbers above re-measured.** brew took
+1.7.0 the day it shipped; version confirmed by `splash --version` **and** the live
+`/opt/homebrew/Cellar/splash/1.7.0/…` process path (`/status` is still schema 8, so the dashboard
+is unaffected). **A 1.6.x → 1.7.0 upgrade cold-starts the persistent prefix cache** — the startup
+log says it plainly: `took back 0 restore points over 0 KV blocks (0 MiB); left 0 copies behind` —
+so the engine suite was run **three passes on one instance behind a recorded warmth gate**
+(`cold_misses` frozen at 10 from pass 1 onward, `hit_rate` 0.875 → 0.988, 55.8 GB read back off SSD,
+`kv_disk_hit_tokens` 0 → 4.25M). Re-measured: warm TTFT **110–118 ms** (was 159), cold **291 ms**
+(was 229 — one sample, flagged as a possible regression, not a finding), ladder w1 **219.8**
+(233.2/219.8/207.5 — still the best recorded, though it fell across passes while the plateau held),
+plateau **479–494** pooled median 481.6, aggregate peak back at **w4** with the w6 dip deepening to
+0.82×, prefill **unchanged** (611,244 tokens in 172.6 s vs 170.5–171.5 s on 1.6.x, so the gain is
+decode-side), and the KV probe still clean at 611,244 tokens with **zero** suspensions.
+
+Two operating consequences, not just numbers: **`--verify-rows auto` is now the default** and the
+engine states at startup that greedy and seeded output can differ run to run — add
+`--verify-rows all` on a fresh `--cache-dir` when a benchmark row has to be reproducible; and
+this repo's own sizing table still claimed a **128G** `MAX_CACHE_DISK` default while `start.sh`
+has shipped **256G** since the eviction fix — the tables now match the live process
+(`--max-cache-disk=274877906944`). Raw JSONL, six `/status` snapshots and the wave's caveats (tenancy was *not*
+clean-window — this session shares the engine) are in the benchmarks repo at
+`bench/splash-concurrency/results/splash-1.7.0-2026-11-17/`. Unchanged on re-check day: OpenCode
+**v2.3.0** still newest, OpenCV **5.1.0.95 still has no PyPI wheels** (`pip index` → newest
+installable 5.0.0.93, so the vision pins stand), Resolve **21.2 build 6** still newest desktop build.
 
 ```bash
 # re-check in about a minute, without changing anything
