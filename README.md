@@ -324,9 +324,12 @@ JSONL at **https://github.com/willturner-maker/benchmarks**. Headlines:
   render-job prepare ~130 ms, output verification ~40 ms, timeline-set ~100 ms.
 - **Render probe** (121-frame UHD H.264 from an 8K source): cold ~3.1 s,
   warm ~1.2–1.3 s (~93–100 fps), stable run to run single-tenant.
-- **Engine** (Splash 1.7.0, re-measured 2026-11-17 across three passes): TTFT
-  **110–118 ms warm** / 291 ms cold; ladder w1 **219.8 tok/s**, plateau **479–494 tok/s**
-  across widths 8→32 with the aggregate peak back at **width 4** (526.5); KV admission
+- **Engine** (Splash 1.7.0, re-measured 2026-11-17 across three passes, plus a zero-tenancy
+  clean-window pass the same day): TTFT
+  **110–118 ms warm** / 291 ms cold; ladder w1 **219.8 tok/s** (clean window: **225.2**, best
+  recorded), plateau **479–494 tok/s**
+  across widths 8→32 with the aggregate peak back at **width 4** (526.5; clean window **543.8**,
+  best recorded); KV admission
   still paces gracefully — **zero suspensions at 611k prompt tokens** (3.93× a
   155,648-token resident budget, itself +18.8% on 1.6.1) with the quietest demote path
   on record (+11 blocks total, zero spill).
@@ -452,6 +455,32 @@ clean-window — this session shares the engine) are in the benchmarks repo at
 `bench/splash-concurrency/results/splash-1.7.0-2026-11-17/`. Unchanged on re-check day: OpenCode
 **v2.3.0** still newest, OpenCV **5.1.0.95 still has no PyPI wheels** (`pip index` → newest
 installable 5.0.0.93, so the vision pins stand), Resolve **21.2 build 6** still newest desktop build.
+
+**Same day, later — the clean-window pass, and why the engine stays on the stock config.** A
+detached runner re-ran the suite with **zero operator-session turns**: ladder w1 **225.2** (best
+recorded), plateau 462.9–484.4 (mean 476.8), peak **w4 543.8**, probe decode median 197.4, KV still
+0 suspensions / 0 demotions at 611,244 tokens. The tenancy-free pass confirms the shape and nudges
+the latency cells; it does not lift the plateau. The `--verify-rows` question was measured rather
+than assumed: the same greedy request ×5 under `auto` and under `all` produced **one distinct output
+in both configs** (same hash), decode price **−0.2 %** — determinism is free *within this probe*
+(n=5, one short prompt, hashes cover content + reasoning), so there is no performance case for
+`all` and no reason to leave the stock config. A side probe also priced the effort knob: per-request
+`reasoning_effort` is honored, and on one bounded Resolve-arithmetic task **low/medium stopped
+thinking on their own** (1,771 / 2,320 reasoning tokens, correct answers, 16–20 s) while **xhigh
+consumed the entire 16k thinking budget** (16,385 tokens, 107 s) for the same answer — ~6× for
+nothing measurable there. **Daily config therefore still stays exactly as `start.sh`
+ships it** (256G cache disk, 56G memory, expert-memory auto, xhigh effort, 16k thinking budget,
+persistent cache, `--verify-rows auto`), re-proven after the runs from the engine's own startup
+banner and `/status` (which now carries a `verify_rows` field): the 21/21 agentic evidence was
+earned at xhigh, so moving the default needs the proper test — an A/B of `medium` vs `xhigh` across
+the six agentic briefs — not one bounded task. Two harness lessons came out of the
+same runs and both are now rules: **stopping Splash means killing the supervisor**
+(`… -m server.server` — `pkill -f "splash serve"` only kills the child, which respawns with the
+original args; `splash` has no `stop` subcommand), and **grading must read payloads, not trust
+fields** — a determinism probe that hashed `message.content` alone returned ten identical hashes of
+an empty string while the model's output lived in `reasoning_content`. Records:
+`bench/splash-concurrency/results/clean-verifyrows-2026-11-17/` (incl. `VALIDITY.md`) and
+`…/clean-verifyrows-2026-11-17-pass2/` in the benchmarks repo.
 
 ```bash
 # re-check in about a minute, without changing anything
