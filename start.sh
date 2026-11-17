@@ -69,6 +69,12 @@ DASH_DIR="${HOME}/splash-dashboard"
 DASH_PID_FILE="${HOME}/.splash-dashboard.pid"
 SPLASH_PID_FILE="${HOME}/.splash.pid"
 
+# OpenCode's project (and therefore which opencode.json applies — MCP permission
+# defaults, the LSP plugin) is resolved from the cwd at handoff. The dashboard leg
+# below cds into DASH_DIR and never cd's back, so the handoff explicitly cds here.
+# Override:  RESOLVE_AI_PROJECT=~/benchmarks start-resolve-ai.sh
+PROJECT_DIR="${RESOLVE_AI_PROJECT:-$HOME/resolve-ai-workflow}"
+
 # ── Parse flags ────────────────────────────────────────────────────
 MODEL="$MODEL_FLASH"
 for arg in "$@"; do
@@ -78,7 +84,7 @@ for arg in "$@"; do
     --no-metrics) OPEN_METRICS=0 ;;
     -h|--help)
       echo "Usage: $0 [--27b] [--no-macmon] [--no-metrics]"
-      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path LAUNCH_RESOLVE_GUI=1"
+      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path LAUNCH_RESOLVE_GUI=1 RESOLVE_AI_PROJECT=~/resolve-ai-workflow"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
   esac
@@ -231,6 +237,8 @@ fi
 # The OpenCode handoff replaces the old `splash claude` bridge: OpenCode talks to
 # the same local engine through the OpenAI-compatible endpoint (see the provider
 # block written by install.sh). Rationale for the switch: HARNESS-MIGRATION.md.
-info "Starting OpenCode..."
+# cd to PROJECT_DIR so the session gets the project's opencode.json (LSP plugin).
+info "Starting OpenCode (project: $PROJECT_DIR)..."
+cd "$PROJECT_DIR" 2>/dev/null || warn "PROJECT_DIR '$PROJECT_DIR' missing — starting OpenCode where we are"
 sleep 3
 exec opencode
