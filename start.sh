@@ -46,7 +46,13 @@ DASH_PORT=8280
 MAX_CACHE_DISK="${MAX_CACHE_DISK:-256G}"
 PERSISTENT_CACHE=1
 MAX_MEMORY="${MAX_MEMORY:-56G}"
-REASONING_EFFORT="xhigh"    # only for requests that set none (the Chat UI); OpenCode sets its own
+# Effort default for requests that set NONE (the Chat UI, and OpenCode — it sends no
+# reasoning_effort, so this default is what chat gets; the engine logs it as
+# "effort absent -> <this value>"). Flipped xhigh->medium on 2026-11-17g: the suite-wide
+# agentic A/B scored both arms 16/18 while xhigh paid ~3x thinking tokens (10,538 vs
+# 3,609 median) and ~40% more wall time — nothing measured for it. Reach for more
+# thinking with --xhigh (see flags below); no need to edit this line.
+REASONING_EFFORT="${REASONING_EFFORT:-medium}"
 THINKING_BUDGET="16384"     # cap runaway thinking so requests still answer (~3 min worst case)
 
 # Optional: put the persistent cache on an external SSD
@@ -82,8 +88,15 @@ for arg in "$@"; do
     --27b) MODEL="$MODEL_27B" ;;
     --no-macmon) OPEN_MACMON=0 ;;
     --no-metrics) OPEN_METRICS=0 ;;
+    # Thinking depth for this launch. Daily default is medium (see above);
+    # --xhigh buys the deepest deliberation at ~3x thinking tokens and ~40%
+    # more wall time, which the 2026-11-17g A/B measured as worth nothing on
+    # these tasks — so pass it only when a hard task earns it.
+    --low|--medium|--high|--xhigh) REASONING_EFFORT="${arg#--}" ;;
+    --effort=*) REASONING_EFFORT="${arg#--effort=}" ;;
     -h|--help)
-      echo "Usage: $0 [--27b] [--no-macmon] [--no-metrics]"
+      echo "Usage: $0 [--27b] [--low|--medium|--high|--xhigh] [--no-macmon] [--no-metrics]"
+      echo "  Thinking depth: --low | --medium (daily default) | --high | --xhigh, or REASONING_EFFORT=<value>"
       echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path LAUNCH_RESOLVE_GUI=1 RESOLVE_AI_PROJECT=~/resolve-ai-workflow"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
@@ -93,6 +106,11 @@ done
 info()  { echo "→ $*"; }
 warn()  { echo "⚠ $*"; }
 error() { echo "✗ $*" >&2; exit 1; }
+
+case "$REASONING_EFFORT" in
+  low|medium|high|xhigh) ;;
+  *) error "invalid effort '$REASONING_EFFORT' — use low, medium, high or xhigh" ;;
+esac
 
 kill_pidfile() {
   local pidfile="$1" label="${2:-process}"
@@ -120,6 +138,7 @@ command -v opencode >/dev/null 2>&1 || error "opencode not found in PATH (run in
 # ── 1. Start Splash ────────────────────────────────────────────────
 info "Starting Splash server with model: $MODEL"
 info "  max-memory=$MAX_MEMORY  max-cache-disk=$MAX_CACHE_DISK  persistent-cache=$PERSISTENT_CACHE"
+info "  default-reasoning-effort=$REASONING_EFFORT  thinking-token-budget=$THINKING_BUDGET"
 
 SERVE_ARGS=(serve --model "$MODEL" --port "$SPLASH_PORT"
   --max-cache-disk "$MAX_CACHE_DISK"
@@ -132,6 +151,9 @@ SERVE_ARGS=(serve --model "$MODEL" --port "$SPLASH_PORT"
 
 kill_pidfile "$SPLASH_PID_FILE" "Splash"
 pkill -f "splash serve" 2>/dev/null || true
+# The supervisor (python … -m server.server) RESPAWNS serve-native children with the
+# OLD args — killing only the child leaves a stale-args engine bound to the port.
+pkill -f -- "-m server[.]server" 2>/dev/null || true
 sleep 1
 lsof -iTCP:"$SPLASH_PORT" -sTCP:LISTEN >/dev/null 2>&1 && warn "Port $SPLASH_PORT still in use after cleanup — Splash may fail to bind"
 

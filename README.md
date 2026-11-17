@@ -113,6 +113,11 @@ stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
 # From the clone, without relying on PATH:
 bash start.sh
 bash stop.sh
+
+# Thinking depth for the launch (the default is `medium`; the engine applies it
+# to any request that asks for none — the Chat UI and OpenCode both send none):
+bash start.sh --xhigh      # deepest deliberation (~3x thinking tokens, ~40% slower)
+bash start.sh --low        # or --high; also accepts --effort=<value> / REASONING_EFFORT=<value>
 ```
 
 > **First start:** the model download is tens of GB and can take several
@@ -120,7 +125,7 @@ bash stop.sh
 > dashboard URL appears and OpenCode opens.
 
 > **Disk:** the model itself is a one-time download. The persistent prefix
-> cache can grow up to `MAX_CACHE_DISK` (default 128 G). An external SSD is
+> cache can grow up to `MAX_CACHE_DISK` (default 256 G). An external SSD is
 > recommended for the cache — see the `EXTERNAL_CACHE` variable in `start.sh`.
 
 ### First-run checklist
@@ -500,6 +505,21 @@ noisy `seal_leaks` field; and T8's Fusion-comp read-backs proved attached comps 
 project close/load churn even without a restart — same in-wave-vs-post-wave split the 16f wave hit,
 now with the actual mechanism. Records: `bench/resolve-agentic/results/2026-11-17g-effort-ab-wave/`
 and `bench/resolve-agentic/results-2026-11-17g.json`.
+
+**2026-11-17 — the operator acted on that A/B: the daily thinking default moved `xhigh` → `medium`.**
+`start.sh` now reads `REASONING_EFFORT="${REASONING_EFFORT:-medium}"`, so the config is still one
+line in one file, and the way to go deeper for a single launch is a flag rather than an edit:
+`start.sh --xhigh` (also `--low` / `--high` / `--effort=<value>`, and an invalid value stops the
+launch instead of reaching the engine). Worth being precise about what the knob governs, because the
+engine log settled an earlier guess: **OpenCode sends no `reasoning_effort` at all**, so the daily
+default *is* what this chat gets — the banner records it as `effort absent → medium`, and the same
+line read `→ xhigh` before the flip. Per-request `reasoning_effort` from an API caller still
+overrides the default, which is how the A/B arms were run without restarting anything. Proof the
+live engine carries the new value comes from the startup banner and the supervisor's own argument
+list (`--default-reasoning-effort=medium`), not from the script on disk: `start.sh` edits only take
+effect at the next launch, and stopping cleanly means killing the supervisor
+(`… -m server.server`), which `stop.sh` now does too — killing the `splash serve` child alone leaves
+a supervisor respawning children with the *old* args.
 
 ```bash
 # re-check in about a minute, without changing anything

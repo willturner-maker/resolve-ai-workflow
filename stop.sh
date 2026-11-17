@@ -42,6 +42,15 @@ if [[ $stopped == no ]]; then
   fi
 fi
 
+# Unconditional: the supervisor (python … -m server.server) RESPAWNS engine
+# children with whatever args it was launched with, so killing only children
+# leaves a stale-args engine bound to the port. The bracket stops -f from
+# matching this pkill's own command line. start.sh sweeps the same pattern
+# before launching.
+if pkill -f -- "-m server[.]server" 2>/dev/null; then
+  info "Splash supervisor stopped (it respawns engine children)"
+fi
+
 # ── 2. Stop Dashboard ──────────────────────────────────────────────
 info "Stopping dashboard..."
 if [[ -f "$DASH_PID_FILE" ]]; then
