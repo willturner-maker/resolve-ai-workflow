@@ -521,6 +521,32 @@ effect at the next launch, and stopping cleanly means killing the supervisor
 (`… -m server.server`), which `stop.sh` now does too — killing the `splash serve` child alone leaves
 a supervisor respawning children with the *old* args.
 
+**2026-11-17, evening — the OpenCV watch fired: 5.1.0.95 wheels landed, the vision stack moved
+and was re-measured.** Earlier re-check lines today read "5.1.0.95 still has no PyPI wheels";
+PyPI received 5.1.0.95 that same day — Windows 14:37 UTC, macOS arm64 (`cp37-abi3-macosx_15_0`)
+at 17:40 UTC, ~5 h behind the GitHub tag. `opencv-python` and `opencv-contrib-python` moved to
+**5.1.0.95 together** in one `--only-binary :all:` transaction (the never-upgrade-one-alone rule;
+the never-compile-an-sdist rule), numpy came along at 2.5.5, and the import chain was re-verified
+before use (cv2 5.1.0, mediapipe 1.2.3, scenedetect 0.7.3, pedalboard 0.9.26). Re-measure
+(benchmarks `bench/visual-venv` run5, SHA-identical fixtures): **median ×0.853 across all 48
+detect rows** — canonical 4×3@0.5 **0.283 → 0.227 s**, 2×2 ×0.65 but 8×4 ×0.99, i.e. the win
+sits in detector create/init, not raw inference; `import cv2` 0.157→0.036 s; cold process
+(import→91 faces) 1.49→1.37 s. The shipped `face_probe.py` and `compare/` were re-run per the
+vision README's own rule: 91 faces, detect+embed 0.94–0.97 s, landmarks 82/91, merge shape held
+(1.8% vs 2.0%). Two behavioural findings change the guidance. **(1) The `match()` in-place vector
+rewrite is NOT fixed in the 5.1.0.95 wheels** — the upstream fix merged 2026-08-28 did not ship
+in the release; the probe reproduces bit-identically (norms 9.82/12.40 → 1.00/1.00), and
+vision/README rule 4 now says don't wait for a release to fix it. **(2) The bundled FFmpeg 9.0.2
+decodes H.264 differently** — same fixture, different first-frame pixels (sha `6716af2b…` on
+5.0.0.93 vs `a2bebe5f…` on 5.1.0.95, proven with an isolated wheel), which moved 9 of the 48
+bench H.264 face-count rows by ±1 while every PNG row and the cosine stats stayed bit-identical:
+the detector is unchanged, decoder-version drift is real, so H.264 face counts are
+decoder-version-dependent records. Also confirmed: `readNetFromTensorflow` is gone (as predicted),
+and every `FaceDetectorYN/SF.create()` now emits a `setPreferableTarget` stderr warning —
+silence it via `cv2.utils.logging.setLogLevel` in stderr-capturing pipelines. Records:
+`bench/visual-venv/run5.json` (+ `run5.err`, + the long-deferred key-label fix), benchmarks
+`f700fc7`.
+
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind

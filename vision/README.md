@@ -45,13 +45,18 @@ in that directory has its licence stated below.
 ## Measured on real footage
 
 One frame of 8128×4288 anamorphic HEVC from a multi-track choral recording (a wide shot of a
-choir riser, faces 43–100 px wide), Apple M5 Ultra. Exact pins: mediapipe 1.2.2, opencv(-contrib)
-5.0.0.93, numpy 2.5.4, Python 3.12.16 — `5.0.0.93` is the newest wheel on PyPI: OpenCV
-**5.1.0** was tagged upstream 2026-11-06 with no Python wheels yet (checked 2026-11-07 against
-`opencv-python`, `-contrib` and `-headless`), so there is nothing to move to, and one 5.1.0
-change touches this stack (rule 4 below). When a 5.1 wheel does land, re-run
-`face_probe.py` and `compare/` before trusting any number on this page. Re-runnable with
-`vision/face_probe.py`; these are read-backs from that run, not estimates.
+choir riser, faces 43–100 px wide), Apple M5 Ultra. Original pins at first read-back:
+mediapipe 1.2.2, opencv(-contrib) 5.0.0.93, numpy 2.5.4, Python 3.12.16 — at the time
+`5.0.0.93` was the newest wheel on PyPI (OpenCV 5.1.0 was tagged upstream 2026-11-06 with no
+Python wheels yet). **That ended 2026-11-17:** the 5.1.0.95 wheels landed (macOS arm64 at
+17:40 UTC) and the stack moved to opencv/-contrib **5.1.0.95** · mediapipe 1.2.3 · numpy 2.5.5.
+Per this page's own rule, `face_probe.py` and `compare/` were re-run on the same frame that
+evening: **91 faces at 4×3@0.5, detect 0.23 s, detect+embed 0.94–0.97 s, landmarks 82/91**; the
+recognition-merge shape held (1.8% vs 2.0%). Bench-grade re-measure with full grids lives in
+`~/benchmarks/bench/visual-venv` (run5): median **×0.853** across all 48 detect rows, cold
+process 1.49→1.37 s — the table below keeps the 5.0.0.93 read-backs, the 5.1.0.95 grid times
+are 2×2 0.135 · 4×3 0.227 · 4×4 0.273 · 8×4 0.414 s (yield still flat). Rule 4 below changed
+too. Re-runnable with `vision/face_probe.py`; these are read-backs from that run, not estimates.
 
 **Stage 1 — OpenCV YuNet detection (+ SFace embeddings) over native-resolution tiles:**
 
@@ -105,9 +110,12 @@ the mesh model declines to fit it, which is why 83 ≠ 90.)
    silently converts the embeddings you were holding. The reported distance is unaffected (cosine
    stays cosine), which is what makes this easy to miss — but anything that later reasons about
    raw activations, normalises a second time, or stores those arrays for a second pass is now
-   working on different data than it thinks. Fixed upstream in OpenCV **5.1.0** ("do not modify
-   the input features in `FaceRecognizerSF::match`", merged 2026-08-28). Normalise explicitly and
-   keep the originals, which is what `compare/recog_quality.py` does.
+   working on different data than it thinks. Upstream merged a fix for OpenCV **5.1.0** ("do not
+    modify the input features in `FaceRecognizerSF::match`", merged 2026-08-28) — but it **did not
+    ship in the released 5.1.0.95 wheels**: re-probed 2026-11-17, the in-place rewrite reproduces
+    bit-identically (norms 9.82/12.40 → 1.00/1.00; record: `~/benchmarks/bench/visual-venv` run5).
+    Do not wait for a release to fix this. Normalise explicitly and
+    keep the originals, which is what `compare/recog_quality.py` does.
 
 ## What it actually buys you
 
