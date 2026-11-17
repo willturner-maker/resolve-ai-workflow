@@ -407,6 +407,16 @@ v2.3.0** on benchmark evidence (21/21 outcome + 21/21 honesty + a provably clean
 0/745 tool events, $0 vs $34.55 per wave — full reasoning in `HARNESS-MIGRATION.md`), and
 the community MCP moved to 5.3.0. The Claude-era versions above are kept as dated history.
 
+**Same day, evening re-check:** the community MCP self-updated to **5.3.1** — #375, a
+`prettier` dev-dependency bump in `resolve-advanced`, with no runtime or tool-behaviour
+change, so the wave records measured on 5.3.0 still stand. Also re-confirmed that evening:
+OpenCode **v2.3.0** is still the newest `v2` tag upstream; Splash **1.6.1** matches brew
+stable; the vision venv shows no drift in the three pins; and OpenCV **5.1.0** is *still*
+tagged-only on GitHub with no PyPI wheels (`pip index` → newest installable 5.0.0.93).
+The one caveat worth knowing about a self-updating server: an MCP process that was already
+running keeps its pre-update code in memory (check `ps -o lstart` against the install
+directory's mtime), so a restart — not just a wait — is what picks up the new version.
+
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind
