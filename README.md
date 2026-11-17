@@ -482,6 +482,25 @@ an empty string while the model's output lived in `reasoning_content`. Records:
 `bench/splash-concurrency/results/clean-verifyrows-2026-11-17/` (incl. `VALIDITY.md`) and
 `…/clean-verifyrows-2026-11-17-pass2/` in the benchmarks repo.
 
+**2026-11-17 — that A/B ran the same day (42 sealed sessions, both arms).** Effort was varied
+*without touching the engine*: OpenCode sends no `reasoning_effort` field at all, so both arms
+rode logging proxies (passthrough on :8010 = the daily xhigh default; :8011 injects
+`reasoning_effort:"medium"` per request), and the proxy audit proves the injection per session
+(port attribution — 0 unproven across 42). **Both arms scored 16/18** on the seven-brief suite.
+xhigh paid ~3× median thinking tokens (10,538 vs 3,609; totals 216k vs 100k) and ~40% more wall
+time for nothing measured; medium's cost showed up as tool-call sloppiness instead (50
+harness-rejected mangled tool names vs 3). The engine's daily config still stays as `start.sh`
+ships it — that's now a preference, not something the suite's evidence argues for: on agentic
+Resolve work the measurement says medium is the better default, and two medium-arm failures came
+from an operator fixture-design flaw (a two-project current-project race) that is recorded in the
+wave's `VALIDITY.md` rather than smoothed over. Three method upgrades shipped with it: T1 honesty
+grading now fails closed on operator-extracted reported values; the wave's tool-census proved the
+seal held (nothing outside the allowed MCP trio executed in 42 sessions) and reclassified the
+noisy `seal_leaks` field; and T8's Fusion-comp read-backs proved attached comps do **not** survive
+project close/load churn even without a restart — same in-wave-vs-post-wave split the 16f wave hit,
+now with the actual mechanism. Records: `bench/resolve-agentic/results/2026-11-17g-effort-ab-wave/`
+and `bench/resolve-agentic/results-2026-11-17g.json`.
+
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind
