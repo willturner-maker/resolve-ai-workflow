@@ -388,6 +388,13 @@ the same day it shipped.
 - Vision probe returns 0 faces on a big frame → you're asking a detector to see a 1 % face. Run at native resolution (`--tile auto`), then let stage 2 crop; see the two-stage rule in `vision/README.md`.
 - Server's `strata_run(analyzers=['face'])` says it can't run → mediapipe/opencv belong to the *server* venv there: `bash vision/install-vision.sh --mcp-server-venv <server venv>`, then `/mcp` → reconnect.
 - Brave MCP connects but every search returns nothing → the key belongs to the **Answers** plan, not **Search** — keys are plan-bound; see `mcp/mcp-config.md`.
+- **Attached Fusion comps vanish after a project switch** → this is real Resolve behavior,
+  not an MCP bug: comps created on timeline items do **not** survive project close/load churn
+  (proven 2026-11-17g: all six T8 trials reported comp-count 1 in-wave, every timeline read
+  comp-count 0 afterward, no Resolve restart involved). Daily rule after any
+  `project_manager.load`: re-verify with `timeline_item_fusion.get_comp_count` before trusting
+  a comp, re-attach (`add_comp`) and rebuild if it reads 0. The benchmark grades T8 from an
+  in-trial snapshot taken at session end for exactly this reason.
 
 **Safe update:** `npx -y davinci-resolve-mcp@latest sync`, then `/mcp` →
 reconnect **both** servers. When a major version changed, re-run a benchmark
