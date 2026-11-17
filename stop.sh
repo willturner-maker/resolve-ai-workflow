@@ -34,7 +34,7 @@ for pf in "$SPLASH_PID_FILE" "$SPLASH_PID_FILE_ALT"; do
 done
 if [[ $stopped == no ]]; then
   # Fallback: kill by name (also catches the serve-native engine child
-  # and any instance the Claude Code CLI spawned without a pid file)
+  # and any instance an agent session spawned without a pid file)
   if pkill -f "splash serve" 2>/dev/null; then
     info "Splash stopped (by process name)"
   else
@@ -69,8 +69,10 @@ if command -v brew >/dev/null 2>&1; then
   done
 fi
 
-# ── 3. Stop any leftover splash agent processes ────────────────────
-pkill -f "splash claude" 2>/dev/null || true
+# ── 3. Agent harness note ──────────────────────────────────────────────────
+# OpenCode is an interactive terminal session — quit it with Ctrl+C//exit in its
+# window. There is no harness side-process to sweep (the old `splash claude`
+# bridge leg was removed with the 2026-11-16 harness switch, see HARNESS-MIGRATION.md).
 
 info "Done. Splash and dashboard are shut down."
 info "(DaVinci Resolve was left running — close it manually if desired.)"

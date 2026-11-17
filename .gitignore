@@ -11,3 +11,7 @@ compare/models/
 runs/
 *.onnx
 compare/models
+
+# local tooling (LSP plugin clone + machine-local config)
+.opencode/
+opencode.json

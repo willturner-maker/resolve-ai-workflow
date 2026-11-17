@@ -8,7 +8,7 @@
 
 # DaVinci Resolve + Local AI Workstation
 
-A complete, scripted post-production workstation: **Claude Code driven by a
+A complete, scripted post-production workstation: **OpenCode driven by a
 fully local LLM**, operating **DaVinci Resolve Studio** through three MCP
 servers, with **Blender rendered headless** for titles and generated content,
 and a **live observability dashboard** — on one Apple Silicon Mac, no cloud,
@@ -22,7 +22,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 │  Splash (brew) ── serves Qwen Flash-Next IQ3_S on :8000  ←→  splash-dashboard on :8280    │
 │      │  OpenAI-compat + Anthropic-compat; persistent SSD prefix cache                     │
 │      ▼                                                                                    │
-│  Claude Code  (splash claude — the agent IS the model you run locally)                    │
+│  OpenCode     (opencode — the agent IS the model you run locally)                         │
 │      │  MCP (stdio)                                                                       │
 │      ├── davinci-resolve            community Python MCP  — live editing/render/guardrails │
 │      ├── davinci-resolve-advanced   community Node MCP    — offline DB/DRX/DRT/QC          │
@@ -54,7 +54,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 | Tool | Benefit |
 |---|---|
 | **Splash** ([incoai/tap](https://github.com/incoai/splash), brew) | Local LLM engine serving `Qwen3.8-Flash-Next IQ3_S` (262k context, GGUF/IQ3 quant) behind OpenAI *and* Anthropic-compatible APIs. Persistent disk prefix-cache means fresh agent sessions reuse ~20–45k cached tokens each. TTFT ~200 ms warm; single-stream decode ~170 tok/s; aggregate plateau ~375 tok/s under concurrency. Also hosts a built-in chat UI on :8000. |
-| **Claude Code via `splash claude`** | The agentic operator. Reads the timeline, plans edits, executes them through MCP with dry-run/confirm-token discipline, verifies via read-backs, renders, grades its own output with ffprobe. Nothing leaves the machine. |
+| **OpenCode** ([opencode.ai](https://opencode.ai)) | The agentic operator. Reads the timeline, plans edits, executes them through MCP with dry-run/confirm-token discipline, verifies via read-backs, renders, grades its own output with ffprobe. Nothing leaves the machine. Replaced Claude Code on 2026-11-16 on measured evidence — see `HARNESS-MIGRATION.md`. |
 | **Community `davinci-resolve` MCP** ([samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp)) | The hands: ~36 action-dispatch tools over the whole scripting API — media pool, timelines, ripple edits with dry-run plans, markers, Fusion comps, render queue + **verified outputs** (ffprobe cross-check of every render), and a live `api_truth` knowledge base of verified Resolve API quirks. Destructive ops auto-archive timelines first. |
 | **`davinci-resolve-advanced` MCP** (same project) | The forensic layer: closed-`Project.db` reads/writes (captions, speed ramps), `.drx` grade XML, DRT timelines, FCPXML/EDL/AAF conform, deliverable-QC specs — all without Resolve running. |
 | **Official ResolveMCP** (bundled in Resolve Studio 21.1+) | Blackmagic's own 18-tool surface: canonical and versioned with the app; useful cross-check and fallback. |
@@ -101,11 +101,12 @@ Most sessions use the community server as primary and keep the official one regi
 ```bash
 git clone https://github.com/willturner-maker/resolve-ai-workflow.git
 cd resolve-ai-workflow
-bash install.sh            # everything below, wired into Claude Code
+bash install.sh            # everything below, wired into OpenCode
 bash install.sh --vision   # same, plus the opt-in face/mouth layer (vision/README.md)
+bash install.sh --lsp      # + LSP tool & post-edit diagnostics for OpenCode V2 (project-scoped)
 
 # After install, open a NEW terminal — the launchers arrive on PATH as:
-start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → Claude Code
+start-resolve-ai.sh        # Splash → dashboard → metrics (opt) → Resolve → OpenCode
 stop-resolve-ai.sh         # clean shutdown (leaves Resolve alone)
 
 # From the clone, without relying on PATH:
@@ -115,7 +116,7 @@ bash stop.sh
 
 > **First start:** the model download is tens of GB and can take several
 > minutes; subsequent starts take seconds. Watch the terminal until the
-> dashboard URL appears and Claude Code opens.
+> dashboard URL appears and OpenCode opens.
 
 > **Disk:** the model itself is a one-time download. The persistent prefix
 > cache can grow up to `MAX_CACHE_DISK` (default 128 G). An external SSD is
@@ -128,13 +129,13 @@ bash stop.sh
 2. Open a **new** terminal so PATH picks up the launchers.
 3. `start-resolve-ai.sh` — first start downloads the model; later starts
    begin in seconds.
-4. The dashboard comes up on :8280, then Claude Code opens. Resolve is
+4. The dashboard comes up on :8280, then OpenCode opens. Resolve is
    **not** launched: the MCP starts it headless (`-nogui`) on the first
    Resolve tool call. To open the GUI at boot instead, prefix the start
    with `LAUNCH_RESOLVE_GUI=1`.
-5. Inside Claude Code: `/mcp` → confirm the three Resolve servers are connected.
+5. Verify the servers: `opencode mcp list` — expect the three Resolve names.
 6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
-7. Confirm the MCP path with a read-only probe — in Claude Code ask:
+7. Confirm the MCP path with a read-only probe — in OpenCode ask:
    `List the timelines in the current Resolve project (read-only)`. (The
    probe needs a project open; the agent can create or load one headless.)
    A reply naming your timelines means the whole chain
@@ -143,7 +144,7 @@ bash stop.sh
 **If the engine never becomes ready:** `tail ~/Library/Logs/splash/splash.err.log`
 (the dashboard leg logs to `~/splash-dashboard.log`).
 **If MCP servers are missing:** re-run `npx -y davinci-resolve-mcp@latest setup
---clients claude-code`, then `/mcp` to reconnect.
+--clients opencode`, then `opencode mcp list` to confirm and restart the session.
 **If memory pressure turns red:** lower `MAX_MEMORY` and restart (sizing table below).
 
 > The dashboard at `http://127.0.0.1:8280` shows engine status, KV residency,
@@ -360,6 +361,11 @@ installable, and a version-to-version re-measure of the vision numbers belongs w
 future bump) ·
 macOS 27.2 arm64 · M5 Ultra 64-core GPU, 96 GB unified.
 
+**2026-11-16 update:** the agent harness switched from Claude Code 2.1.x to **OpenCode
+v2.3.0** on benchmark evidence (21/21 outcome + 21/21 honesty + a provably clean seal at
+0/745 tool events, $0 vs $34.55 per wave — full reasoning in `HARNESS-MIGRATION.md`), and
+the community MCP moved to 5.3.0. The Claude-era versions above are kept as dated history.
+
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind
@@ -387,7 +393,7 @@ update the numbers here.
 Scripts in this repo: MIT (see `LICENSE`). The tools it installs have their own
 licenses — Splash (incoai), davinci-resolve-mcp (MIT, samuelgursky),
 brave-search-mcp-server (MIT, Brave), splash-dashboard (rickhuizinga),
-Blender (GPL), Claude Code (Anthropic).
+Blender (GPL), OpenCode (MIT, sst), opencode-v2-lsp-support (community, MIT).
 
 The **vision add-on's** model weights, read from the `LICENSE` file in each source directory:
 OpenCV **YuNet** (detector) is **MIT**, and **SFace** (recogniser) is **Apache-2.0** — both stated

@@ -1,7 +1,7 @@
 # The MCP servers on this workstation
 
 The workstation registers three Resolve servers side by side. They are
-complementary — Claude Code routes between them per task, and having all three is
+complementary — OpenCode routes between them per task, and having all three is
 what makes the workflow feel like one operator with hands on every layer of
 Resolve. At the end sits one optional non-Resolve companion (`brave-search`),
 the only leg that costs money and leaves the machine.
@@ -9,7 +9,7 @@ the only leg that costs money and leaves the machine.
 ## 1. `davinci-resolve` — community server (Python)
 
 - Repo: https://github.com/samuelgursky/davinci-resolve-mcp (MIT)
-- Install (one-shot): `npx -y davinci-resolve-mcp@latest setup --clients claude-code`
+- Install (one-shot): `npx -y davinci-resolve-mcp@latest setup --clients opencode`
   → managed tree under `~/Library/Application Support/davinci-resolve-mcp`
   (own venv; marker file `.davinci-resolve-mcp-managed.json` holds the version).
 - Current verified version on this workstation: **4.19.3** (see README
@@ -43,7 +43,7 @@ the only leg that costs money and leaves the machine.
 
 - Ships **inside Resolve Studio 21.1+** at
   `/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Applications/ResolveMCP`
-  — registered with `claude mcp add "DaVinci Resolve" -- <path>`.
+  — registered with `opencode mcp add --global "DaVinci Resolve" -- <path>`.
 - 18 tools versioned with the Resolve app; canonical scripting surface, and the
   one Blackmagic supports as the app evolves.
 - Note: external scripting is Studio-only (free edition reaches the in-app bridge).
@@ -64,7 +64,7 @@ claim in the README was checked through a route like it.
 - Register (user scope; the key goes into the MCP env entry, not shell history):
 
   ```bash
-  claude mcp add --scope user brave-search -e BRAVE_API_KEY='<your-key>' \
+  opencode mcp add --global brave-search -e BRAVE_API_KEY='<your-key>' \
     -- npx -y @brave/brave-search-mcp-server@2.1.4
   ```
 
@@ -93,9 +93,8 @@ claim in the README was checked through a route like it.
 ## Registering / verifying
 
 ```bash
-claude mcp list                       # expect the three Resolve names (+ brave-search if opted in)
-# In a Claude Code session:
-/mcp                                  # reconnect servers after any update
+opencode mcp list                    # expect the three Resolve names (+ brave-search if opted in)
+# After any update, restart the OpenCode session — MCP servers spawn with it.
 ```
 
 Gotcha learned the hard way: after an update, the **version field can report the
@@ -106,7 +105,7 @@ reconnect is the tool count/shape changing, not the version string.
 
 ```bash
 npx -y davinci-resolve-mcp@latest sync     # refreshes Python + Node servers in place
-# then: /mcp → reconnect BOTH davinci-resolve and davinci-resolve-advanced
+# then: restart the OpenCode session to respawn BOTH davinci-resolve and davinci-resolve-advanced
 ```
 
 Ask the server whether it's behind before syncing — no Resolve connection needed, and it
@@ -123,17 +122,14 @@ fix the sync.
 
 The community server deliberately defaults destructive actions to dry-run and
 gates the rest behind confirm tokens, so auto-approving its tools is reasonable.
-`~/.claude/settings.json`:
+`~/.config/opencode/opencode.json` (V2 policy entries — install.sh merges these in):
 
-```json
+```jsonc
 {
-  "permissions": {
-    "allow": [
-      "mcp__davinci-resolve__*",
-      "mcp__davinci-resolve-advanced__*",
-      "mcp__DaVinci_Resolve__*"
-    ]
-  }
+  "permissions": [
+    { "action": "davinci-resolve*", "resource": "*", "effect": "allow" },
+    { "action": "DaVinci Resolve*", "resource": "*", "effect": "allow" }
+  ]
 }
 ```
 

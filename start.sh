@@ -1,20 +1,27 @@
 #!/bin/bash
 # start-resolve-ai.sh
-# Starts Splash (Qwen Flash-Next IQ3_S) + dashboard + DaVinci Resolve + Claude Code
-# Optional fallback: --27b
+# Starts Splash (Qwen3.8-Flash-Next IQ3_S) + dashboard + OpenCode
+# DaVinci Resolve is NOT started automatically — OpenCode launches it on demand
+# via MCP when a task needs it. Optional fallback: --27b
 #
 # Memory sizing was measured on an M5 Ultra 96 GB with Resolve Studio running
 # concurrently (2026-10/11 iteration log preserved below — tune via env vars
 # rather than editing):
 #   MAX_MEMORY=56G  — leaves ~40 GB of slack for Resolve + macOS on 96 GB while
 #                     keeping the KV pool ~10 GB (~770k tokens, 3x the 262k ctx).
-#                     Smaller machines: try 24–32 GB; the engine prints its own
+#                     48G capped the KV pool below the 262k context (100% pinned,
+#                     SSD spill); 64G left only 11-13% free + 7.6G swap during a
+#                     Resolve UHD render. 56G is the measured middle. Smaller
+#                     machines: try 24–32 GB; the engine prints its own
 #                     recommended working set at startup.
 #   MAX_CACHE_DISK=256G — 64 G saturated and started evicting warm prefixes;
 #                     so did 128 G, in about two weeks of sustained agentic
 #                     use (tier hits quota -> oldest-first eviction, a few
-#                     percent of requests re-prefill). Disk cache is cheap,
-#                     RAM is not; size it to your volume's free space.
+#                     percent of requests re-prefill). Raised 128G -> 256G on
+#                     2026-11-14 after the tier hit 99.94% of quota; takes
+#                     effect at NEXT launch only — never restart the live
+#                     engine mid-session. Disk cache is cheap, RAM is not;
+#                     size it to your volume's free space.
 #   --expert-memory auto — splash >= 1.6.0 elastic expert store; a fixed size
 #                     disables elasticity. Keep 'auto'.
 #   THINKING_BUDGET=16384 — caps runaway deliberation so requests still answer.
@@ -39,7 +46,7 @@ DASH_PORT=8280
 MAX_CACHE_DISK="${MAX_CACHE_DISK:-256G}"
 PERSISTENT_CACHE=1
 MAX_MEMORY="${MAX_MEMORY:-56G}"
-REASONING_EFFORT="xhigh"    # only for requests that set none (the Chat UI); Claude Code sets its own
+REASONING_EFFORT="xhigh"    # only for requests that set none (the Chat UI); OpenCode sets its own
 THINKING_BUDGET="16384"     # cap runaway thinking so requests still answer (~3 min worst case)
 
 # Optional: put the persistent cache on an external SSD
@@ -101,6 +108,7 @@ tail_logs_on_failure() {
 }
 
 command -v splash >/dev/null 2>&1 || error "splash not found in PATH (brew tap incoai/tap && brew install incoai/tap/splash)"
+command -v opencode >/dev/null 2>&1 || error "opencode not found in PATH (run install.sh first)"
 [[ -n "$EXTERNAL_CACHE" && ! -d "$EXTERNAL_CACHE" ]] && error "EXTERNAL_CACHE path does not exist: $EXTERNAL_CACHE"
 
 # ── 1. Start Splash ────────────────────────────────────────────────
@@ -219,7 +227,10 @@ if [[ $OPEN_MACMON -eq 1 ]] && command -v macmon >/dev/null 2>&1 && ! pgrep -x m
             -e "tell application \"Terminal\" to do script \"$MACMON_BIN\"" >/dev/null 2>&1 || true
 fi
 
-# ── 5. Launch Claude Code via Splash (takes over the terminal) ─────
-info "Starting Claude Code (splash claude)..."
+# ── 5. Launch OpenCode (takes over the terminal) ───────────────────
+# The OpenCode handoff replaces the old `splash claude` bridge: OpenCode talks to
+# the same local engine through the OpenAI-compatible endpoint (see the provider
+# block written by install.sh). Rationale for the switch: HARNESS-MIGRATION.md.
+info "Starting OpenCode..."
 sleep 3
-exec splash claude
+exec opencode
