@@ -547,6 +547,17 @@ silence it via `cv2.utils.logging.setLogLevel` in stderr-capturing pipelines. Re
 `bench/visual-venv/run5.json` (+ `run5.err`, + the long-deferred key-label fix), benchmarks
 `f700fc7`.
 
+**2026-11-17, evening — routine version sweep, and what is NOT moving.** `brew outdated` came
+back with two runtime-dependency patches only: **dav1d 1.5.4→1.5.5** (behind ffmpeg) and
+**libomp 23.1.5→23.1.6** (behind ggml/llama.cpp/whisper.cpp); upgraded, dependents relinked
+clean. The tracked stack is current: Splash **1.7.0** = brew stable, node **26.13.1_2**,
+opencode **v2.3.0** = newest upstream `v2` tag (verified against `git ls-remote --tags`),
+community MCP **5.3.1** = npm latest, whisper.cpp 1.9.5, ffmpeg 9.0.2 — none outdated.
+The one npm move: the pinned **brave-search MCP 2.1.4 → 2.1.5** (published 2026-11-17),
+release notes are dependabot dependency bumps plus `fix: accept el and ja for search_lang` —
+no tool-surface change, so the search results in the wave records are unaffected; remember a
+*running* MCP process keeps the old code until reconnected, the pin only binds the next launch.
+
 ```bash
 # re-check in about a minute, without changing anything
 brew outdated --verbose                                   # formulae behind
