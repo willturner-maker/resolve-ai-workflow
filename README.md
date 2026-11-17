@@ -43,6 +43,7 @@ People kept asking how the setup works; this repo is the answer, as scripts.
 - [Quick start](#quick-start)
 - [What agentic control actually does here](#what-agentic-control-actually-does-here)
 - [What the vision layer gets you](#what-the-vision-layer-gets-you-opt-in)
+- [Transcription: which tool, and where the models live](#transcription-which-tool-and-where-the-models-live)
 - [Benchmarks (measured, reproducible, honest)](#benchmarks-measured-reproducible-honest)
 - [Operating practices that keep it trustworthy](#operating-practices-that-keep-it-trustworthy)
 - [Troubleshooting quick hits](#troubleshooting-quick-hits)
@@ -270,6 +271,46 @@ carries boxes, scores and scalar mouth state only; vectors appear solely with
 deliverables — the publish-scan below blocks *names*; identity data needs the stricter rule of
 not being exported at all, especially for footage with minors. Model weights are downloaded from
 Google's MediaPipe storage and the OpenCV Zoo; nothing here uploads anything.
+
+## Transcription: which tool, and where the models live
+
+Three local options, chosen by the question rather than by model size:
+
+| Question | Use | Cost |
+|---|---|---|
+| "What was said, roughly when" — subtitles, search, cut candidates | **whisper.cpp** (installed by `install.sh`; the MCP server's subtitle and cut-proposal tools ride on those transcripts) | `base` weights ≈ 150 MB, no Python env |
+| **Word-level** grounding — which word lands at which frame, per-singer timing behind a marker or a zoom cue | **WhisperX** (CTranslate2 `large-v3` + wav2vec2 CTC alignment) | 4.2 GB weights + ≈1.5 GB venv (torch rides along) |
+
+Word-level alignment is the only reason to have WhisperX; faster-whisper's segment timestamps
+cover everything else. Measured on real multitrack choral audio, M5 Ultra, CPU, `int8`:
+**167 s of audio in 48.6 s**, a 46-minute act in **638 s** (≈4× faster than realtime) — and
+that is the ASR pass alone; alignment is a second sweep over the same audio.
+
+**One shared model cache, not one per project.** WhisperX reaches HuggingFace through two
+channels that expect *different paths*, and the mismatch is silent — it simply re-downloads
+≈4.4 GB:
+
+- `whisperx.load_model(..., download_root=X)` uses X **directly** as its hub dir
+  → `X/models--Systran--faster-whisper-large-v3/…`
+- the alignment pipeline goes through `transformers`, which honours `HF_HOME`
+  → `$HF_HOME/hub/models--jonatasgrosman--…/…`
+
+So both must point at the same directory, kept on a media volume rather than the boot disk:
+
+```bash
+export WHISPERX_HF="/Volumes/YourVolume/local.AI/WhisperX/hf"  # ~4.2 GB, reused by every project
+export HF_HOME="$WHISPERX_HF"          # before importing whisperx, not after
+```
+
+Put those two exports in the venv's `bin/activate` as well as the shell profile, so a fresh
+environment cannot forget them.
+
+Two tidy-ups cut 2.1 GB from the 6.4 GB download: the alignment repo ships five weight
+formats plus a fairseq n-gram decoding LM, and the HF CTC pipeline loads exactly one of each
+(keep `model.safetensors` + config/vocab/preprocessor; drop `pytorch_model.bin`, `lm.binary`,
+`unigrams.txt`). When pruning, remove a snapshot entry **together with the blob it points at**,
+then look for blobs no snapshot references — a half-pruned repo leaves ~800 MB behind that
+nothing reports as stale.
 
 ## Benchmarks (measured, reproducible, honest)
 
