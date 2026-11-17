@@ -388,6 +388,22 @@ with no breaking changes declared. This workstation was still on 4.19.3 on the r
 a major bump gets the usual treatment: sync, reconnect, rerun the benchmark suite, then
 update the numbers here.
 
+## Versioning
+
+This repo is semver from **v2.0.0** — the OpenCode harness switch:
+
+- **Major** — a breaking change to the stack contract: harness swap, install/start/stop
+  semantics, or config-shape requirements. The Claude Code era was untagged (think of it
+  as v1.x); v2.0.0 is the OpenCode era. The reasoning for breaking changes lives in
+  `HARNESS-MIGRATION.md`.
+- **Minor** — new scripts, flags, or add-ons that change nothing existing (the `--lsp`
+  leg would have been one).
+- **Patch** — fixes and documentation only.
+
+Releases are tagged on `main` and published on GitHub Releases with a short
+"what breaks / what changed" note. Not every commit lands in a release — tag when the
+tagged state is worth pointing someone at.
+
 ## License
 
 Scripts in this repo: MIT (see `LICENSE`). The tools it installs have their own
