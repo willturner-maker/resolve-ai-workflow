@@ -557,6 +557,15 @@ The one npm move: the pinned **brave-search MCP 2.1.4 → 2.1.5** (published 202
 release notes are dependabot dependency bumps plus `fix: accept el and ja for search_lang` —
 no tool-surface change, so the search results in the wave records are unaffected; remember a
 *running* MCP process keeps the old code until reconnected, the pin only binds the next launch.
+And **why npm itself stays on 11.20.0 despite 12.2.2 being current upstream**: npm 11.20.0 is a
+file *inside* brew's node formula (`/opt/homebrew/bin/npm` → `Cellar/node/…`), and the standalone
+`npm` formula is gone — it's just a node alias now. The only way to npm 12 today is
+`npm install -g npm@12`, which overwrites a brew-owned symlink: disk-npm would stop matching what
+the installer accounts for, and the next `brew upgrade node` would silently revert it — the same
+version-on-disk ≠ version-running trap flagged above, on the launch transport (npx) of the pinned
+MCP trio. Nothing here needs npm 12 (its breaking changes — `shrinkwrap`, `adduser`/`stars`
+removal, `--json` output shapes — touch surfaces this stack never calls), so npm 12 arrives the
+clean way: with the next node release that bundles it, in one brew-managed step.
 
 ```bash
 # re-check in about a minute, without changing anything
