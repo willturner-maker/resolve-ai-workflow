@@ -48,6 +48,16 @@ while singing, <=0.03 at rest. Calibrate the threshold on your own footage.
 
 Low counts are usually the shot, not the tool: a wide auditorium frame returned 3 faces
 because the audience was facing away and the only people on stage were in profile.
+
+`--seq N` adds a temporal pass: it samples N frames (--stride apart, one seek then
+sequential reads because per-frame seeking on long-GOP HEVC costs a full GOP decode),
+associates faces into per-identity tracks (greedy one-to-one, 0.7*IoU + 0.3*SFace
+cosine), and pools mouth state per track. Measured on two choir riser shots, it is an
+honest but small win — per-frame landmark rate 0.851 vs per-identity coverage 0.874 on
+one clip, 0.664 vs 0.682 on the other — because landmark failures are mostly persistent
+per identity (profiles, occlusion), not transient per frame. Keep --stride 4-8: at
+stride 30 the association degrades (match IoU median 0.956 -> 0.760). Never read a
+distinct-people count from tracks_total: it runs 10-40% above the per-frame face count.
 """
 
 from __future__ import annotations
@@ -238,6 +248,229 @@ def measure_mouths(frame, faces, model_path, margin, max_crops):
     return tried, hits, time.perf_counter() - t0
 
 
+def _iou(a, b) -> float:
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
+    if ix1 <= ix0 or iy1 <= iy0:
+        return 0.0
+    inter = (ix1 - ix0) * (iy1 - iy0)
+    union = (ax1 - ax0) * (ay1 - ay0) + (bx1 - bx0) * (by1 - by0) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _cosine(a, b) -> float:
+    if a is None or b is None:
+        return 0.0
+    na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+    if not na or not nb:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+def frame_stream(video, start_frame, start_time, n, stride):
+    """Yield (frame_index, frame) for n samples every `stride`-th frame.
+
+    ONE seek then sequential reads: seeking per frame on long-GOP 8.1K HEVC costs a
+    full GOP decode each time, which is what made the sampling pass crawl.
+    """
+    cap = cv2.VideoCapture(video)
+    if not cap.isOpened():
+        sys.exit(f"could not open video: {video}")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    if start_frame is None:
+        start_frame = int(float(start_time) * fps)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_frame))
+    idx, got = int(start_frame), 0
+    try:
+        while got < n:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+            if (idx - start_frame) % max(1, stride) == 0:
+                yield idx, frame
+                got += 1
+            idx += 1
+    finally:
+        cap.release()
+
+
+def associate(tracks, faces, max_absent):
+    """Greedy one-to-one association of one frame's faces to open tracks.
+
+    Returns an assignment (track_index, face_index) for **every** face: matched faces
+    reuse a track, unmatched ones open a new one, so the caller can record an
+    observation without caring which case it was.
+
+    Score is IoU alone when embeddings are off; with embeddings it is 0.7*IoU +
+    0.3*cosine, because on a packed riser IoU alone cannot separate two neighbours
+    that shift relative to each other between samples.
+    """
+    pairs = []
+    for ti, tr in enumerate(tracks):
+        if tr["absent"] >= max_absent:
+            continue
+        for fi, face in enumerate(faces):
+            iou = _iou(tr["bbox"], face["bbox"])
+            if iou <= 0.05:
+                continue
+            cos = _cosine(tr.get("_embedding"), face.get("_embedding"))
+            score = 0.7 * iou + 0.3 * cos if face.get("_embedding") is not None else iou
+            pairs.append((score, iou, cos, ti, fi))
+    pairs.sort(key=lambda p: -p[0])
+    used_t, used_f, assignments = set(), set(), []
+    for _score, iou, cos, ti, fi in pairs:
+        if ti in used_t or fi in used_f:
+            continue
+        used_t.add(ti)
+        used_f.add(fi)
+        assignments.append((ti, fi))
+        tr = tracks[ti]
+        tr["bbox"] = faces[fi]["bbox"]
+        tr["absent"] = 0
+        tr["iou_match"].append(iou)
+        tr["cos_match"].append(cos)
+        if faces[fi].get("_embedding") is not None:
+            tr["_embedding"] = faces[fi]["_embedding"]
+    for tr in tracks:
+        if tr["absent"] < max_absent and not any(ti == tr["id"] for ti, _f in assignments):
+            tr["absent"] += 1
+    for fi, face in enumerate(faces):
+        if fi not in used_f:
+            tracks.append({"id": len(tracks), "bbox": face["bbox"], "absent": 0, "obs": [],
+                           "iou_match": [], "cos_match": [], "_embedding": face.get("_embedding")})
+            assignments.append((len(tracks) - 1, fi))
+    return assignments
+
+
+def track_summary(tracks, jawopen_threshold):
+    """Pool mouth state per track — the point of --seq: a face that only lands
+    landmarks in 2 of 8 samples still yields a usable per-identity reading."""
+    out = []
+    for tr in tracks:
+        obs = tr["obs"]
+        if not obs:
+            continue
+        jaws = [o["jawOpen"] for o in obs if o.get("jawOpen") is not None]
+        pucker = [o["mouthPucker"] for o in obs if o.get("mouthPucker") is not None]
+        geo = [o["geo_open_ratio"] for o in obs if o.get("geo_open_ratio") is not None]
+        hits = sum(1 for o in obs if o.get("landmarks"))
+        out.append({
+            "track": tr["id"],
+            "frames_observed": len(obs),
+            "landmark_hits": hits,
+            "coverage": round(hits / len(obs), 3),
+            "jawopen_median": round(float(np.median(jaws)), 3) if jaws else None,
+            "jawopen_min": round(min(jaws), 3) if jaws else None,
+            "jawopen_max": round(max(jaws), 3) if jaws else None,
+            "mouthpucker_median": round(float(np.median(pucker)), 3) if pucker else None,
+            "geo_open_median": round(float(np.median(geo)), 4) if geo else None,
+            "vocal_candidate": bool(jaws and float(np.median(jaws)) >= jawopen_threshold),
+            "match_iou_median": round(float(np.median(tr["iou_match"])), 3) if tr["iou_match"] else None,
+            "match_cos_median": round(float(np.median(tr["cos_match"])), 3) if tr["cos_match"] else None,
+        })
+    return sorted(out, key=lambda e: (-e["frames_observed"], e["track"]))
+
+
+def run_sequence(args, det_path, recog_path, landmark_path, cols, rows):
+    """--seq N: sample a window, track faces across it, pool mouth state per identity."""
+    frames_out, tracks, t_total, vocal_per_frame = [], [], 0.0, []
+    for idx, frame in frame_stream(args.video, args.frame, args.time, args.seq, args.stride):
+        h, w = frame.shape[:2]
+        t0 = time.perf_counter()
+        faces, raw, det_s = yunet_faces(frame, (cols, rows), det_path, recog_path, args.score_threshold)
+        tried, hits, mp_s = measure_mouths(frame, faces, landmark_path, args.crop_margin, args.max_crops)
+        t_total += time.perf_counter() - t0
+        for ti, fi in associate(tracks, faces, args.max_absent):
+            m = faces[fi].get("mouth") or {}
+            tracks[ti]["obs"].append({"frame": idx, "landmarks": m.get("landmarks", 0),
+                                      "jawOpen": m.get("jawOpen"), "mouthPucker": m.get("mouthPucker"),
+                                      "geo_open_ratio": m.get("geo_open_ratio")})
+        vocal_n = sum(1 for f in faces
+                      if (f.get("mouth") or {}).get("jawOpen") is not None
+                      and f["mouth"]["jawOpen"] >= args.jawopen_threshold)
+        vocal_per_frame.append(vocal_n)
+        frames_out.append({"frame": idx, "faces_raw": raw, "faces_merged": len(faces),
+                           "crops_tried": tried, "landmarks_found": hits,
+                           "landmark_rate": round(hits / tried, 3) if tried else None,
+                           "vocal_candidates": vocal_n,
+                           "detect_s": round(det_s, 3), "mediapipe_s": round(mp_s, 3)})
+        print(f"  frame {idx}: {len(faces)} faces, {hits}/{tried} landmarked, "
+              f"{len(tracks)} tracks open", file=sys.stderr)
+
+    summ = track_summary(tracks, args.jawopen_threshold)
+    rates = [f["landmark_rate"] for f in frames_out if f["landmark_rate"] is not None]
+    covers = [e["coverage"] for e in summ]
+    ids_with_reading = sum(1 for e in summ if e["jawopen_median"] is not None)
+    # per-identity coverage is the number that matters: an identity counts as covered if
+    # ANY of its samples landed landmarks, not if every frame did
+    covered_ids = sum(1 for e in summ if e["landmark_hits"] > 0)
+    return frames_out, summ, {
+        "frames_sampled": len(frames_out), "stride": args.stride, "start": args.frame if args.frame is not None else args.time,
+        "wall_s_total": round(t_total, 2),
+        "wall_s_per_frame": round(t_total / max(1, len(frames_out)), 3),
+        "tracks_total": len(summ),
+        "tracks_observed_ge2_frames": sum(1 for e in summ if e["frames_observed"] >= 2),
+        "per_frame_landmark_rate_mean": round(float(np.mean(rates)), 3) if rates else None,
+        "per_identity_coverage": round(covered_ids / len(summ), 3) if summ else None,
+        "per_track_frame_coverage_mean": round(float(np.mean(covers)), 3) if covers else None,
+        "identities_with_a_mouth_reading": ids_with_reading,
+        "vocal_candidates_per_frame_mean": round(float(np.mean(vocal_per_frame)), 2) if vocal_per_frame else None,
+        "vocal_candidates_per_identity": sum(1 for e in summ if e["vocal_candidate"]),
+        "association": ("greedy one-to-one, score = 0.7*IoU + 0.3*SFace cosine"
+                        if recog_path else "greedy one-to-one, IoU only (--no-embeddings)"),
+        "max_absent_samples": args.max_absent,
+        "identity_data": "SFace vectors are held in memory for this run only and are never "
+                         "written to disk here; track ids are anonymous and stable only within "
+                         "one run — do not treat them as a person key across runs.",
+    }
+
+
+def video_dims(video):
+    cap = cv2.VideoCapture(video)
+    if not cap.isOpened():
+        sys.exit(f"could not open video: {video}")
+    w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    if not w or not h:
+        sys.exit(f"no frame dimensions reported for {video}")
+    return w, h
+
+
+def resolve_grid(args, w, h):
+    if args.tile.lower() == "auto":
+        return auto_grid(w, h)
+    try:
+        return tuple(int(v) for v in args.tile.lower().split("x"))
+    except ValueError:
+        sys.exit("--tile wants WxH (e.g. 4x4) or 'auto'")
+
+
+def interpretation(args):
+    return {
+        "jawopen_threshold": args.jawopen_threshold,
+        "mouth_signal": "jawOpen (ARKit blendshape). geo_open_ratio is a vertical-gap "
+                        "heuristic that misses puckered-open mouths; compare mouthPucker.",
+        "identity_signal": "SFace 128-d cosine; the model's published same-person threshold is "
+                           "0.363. On ~55 px faces it measured 1.1% same-person splits and "
+                           "2.0% wrong merges (AUC 0.999) — treat a distinct-people count as "
+                           "an estimate, and re-measure on your own footage.",
+        "caveat": "thresholds measured on one choral session (n=1, faces ~70-95 px). "
+                  "MediaPipe's Pose Landmarker detects at most 3 people per call, so "
+                  "never read group counts from pose.",
+    }
+
+
+def emit(result, args) -> int:
+    text = json.dumps(result, indent=2)
+    print(text)
+    if args.json_out:
+        with open(args.json_out, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     src = ap.add_mutually_exclusive_group(required=True)
@@ -245,6 +478,15 @@ def main() -> int:
     src.add_argument("--video", help="path to a video; pair with --time or --frame")
     ap.add_argument("--time", type=float, default=0.0, help="seconds into --video")
     ap.add_argument("--frame", type=int, help="exact frame index in --video (wins over --time)")
+    ap.add_argument("--seq", type=int, default=1,
+                    help="temporal mode: sample N frames from --video, associate faces across them, "
+                         "and pool mouth state per identity (needs --video; single frame if 1)")
+    ap.add_argument("--stride", type=int, default=1,
+                    help="--seq: frame step between samples. Keep face displacement between samples "
+                         "well under the face width or association degrades; for a standing choir at "
+                         "29.97 fps, stride 4-8 is comfortable")
+    ap.add_argument("--max-absent", type=int, default=2,
+                    help="--seq: close a track after this many consecutive unmatched samples")
     ap.add_argument("--tile", default="auto", help="detection tile grid WxH, or 'auto' (each tile <= %d px)" % TILE_TARGET_PX)
     ap.add_argument("--score-threshold", type=float, default=0.5,
                     help="YuNet face score. Measured on one 8.1K choir frame (faces 43-100 px): "
@@ -269,15 +511,17 @@ def main() -> int:
     ap.add_argument("--json-out", help="also write the JSON here")
     args = ap.parse_args()
 
-    frame = load_frame(args)
-    h, w = frame.shape[:2]
-    if args.tile.lower() == "auto":
-        cols, rows = auto_grid(w, h)
+    if args.seq > 1:
+        if not args.video:
+            sys.exit("--seq needs --video")
+        if args.save_embeddings:
+            sys.exit("--save-embeddings is single-frame only; --seq keeps SFace vectors in memory "
+                     "and writes no identity data")
+        w, h = video_dims(args.video)
     else:
-        try:
-            cols, rows = (int(v) for v in args.tile.lower().split("x"))
-        except ValueError:
-            sys.exit("--tile wants WxH (e.g. 4x4) or 'auto'")
+        frame = load_frame(args)
+        h, w = frame.shape[:2]
+    cols, rows = resolve_grid(args, w, h)
 
     def model(name):
         path = os.path.join(args.models, name)
@@ -287,9 +531,38 @@ def main() -> int:
 
     det_path = model(DET_MODEL)
     recog_path = None if args.no_embeddings else model(RECOG_MODEL)
+    landmark_path = model("face_landmarker.task")
+
+    if args.seq > 1:
+        frames_out, tracks, temporal = run_sequence(args, det_path, recog_path, landmark_path,
+                                                    cols, rows)
+        return emit({
+            "mode": "sequence",
+            "source": {"video": args.video, "time_s": args.time, "frame": args.frame,
+                       "width": w, "height": h},
+            "detection": {"model": DET_MODEL, "recognizer": RECOG_MODEL if recog_path else None,
+                          "score_threshold": args.score_threshold,
+                          "tile_grid": f"{cols}x{rows}", "tiles": cols * rows,
+                          "tile_target_px": TILE_TARGET_PX},
+            "temporal": temporal,
+            "frames": frames_out,
+            "tracks": tracks,
+            "interpretation": dict(
+                interpretation(args),
+                vocal_candidates=temporal["vocal_candidates_per_identity"],
+                why_sequence="MediaPipe lands landmarks per frame and loses profile or occluded "
+                             "faces in any single one; pooling along a track means one good sample "
+                             "per identity is enough. Read the per_frame_landmark_rate_mean vs "
+                             "per_identity_coverage pair — that gap is what the mode buys.",
+                association_warning="tracks are geometric+identity association, not ground truth: "
+                                    "read match_iou_median/match_cos_median before trusting a track "
+                                    "that spans many frames, and a track that never lands landmarks "
+                                    "yields no reading at all (coverage 0 is honest, not silence).",
+            ),
+        }, args)
+
     faces, raw, det_s = yunet_faces(frame, (cols, rows), det_path, recog_path, args.score_threshold)
 
-    landmark_path = model("face_landmarker.task")
     tried, hits, mp_s = measure_mouths(frame, faces, landmark_path, args.crop_margin, args.max_crops)
 
     for f in faces:
@@ -312,19 +585,7 @@ def main() -> int:
                       "note": "whole-frame detection was 0 at 1600 and 4032 px caps on this "
                               "content; stage 2 runs on native crops for that reason"},
         "faces": [{k: v for k, v in f.items() if not k.startswith("_")} for f in faces],
-        "interpretation": {
-            "jawopen_threshold": args.jawopen_threshold,
-            "vocal_candidates": len(vocal),
-            "mouth_signal": "jawOpen (ARKit blendshape). geo_open_ratio is a vertical-gap "
-                            "heuristic that misses puckered-open mouths; compare mouthPucker.",
-            "identity_signal": "SFace 128-d cosine; the model's published same-person threshold is "
-                               "0.363. On ~55 px faces it measured 1.1% same-person splits and "
-                               "2.0% wrong merges (AUC 0.999) — treat a distinct-people count as "
-                               "an estimate, and re-measure on your own footage.",
-            "caveat": "thresholds measured on one choral session (n=1, faces ~70-95 px). "
-                      "MediaPipe's Pose Landmarker detects at most 3 people per call, so "
-                      "never read group counts from pose.",
-        },
+        "interpretation": dict(interpretation(args), vocal_candidates=len(vocal)),
     }
 
     if args.save_embeddings:
@@ -350,12 +611,7 @@ def main() -> int:
               f"{args.save_embeddings} (cosine >= 0.363 = same person) — identity data, "
               f"keep it local.", file=sys.stderr)
 
-    text = json.dumps(result, indent=2)
-    print(text)
-    if args.json_out:
-        with open(args.json_out, "w", encoding="utf-8") as fh:
-            fh.write(text + "\n")
-    return 0
+    return emit(result, args)
 
 
 if __name__ == "__main__":

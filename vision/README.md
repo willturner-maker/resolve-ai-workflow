@@ -69,7 +69,10 @@ Yield is flat (90–93) across every grid; time is what changes, so `--tile auto
 OpenCV's own DNN reader — so a cold single-frame run (imports, detection, embeddings, landmarks)
 is **2.19 s total**. Two honest caveats on the counts: they move with the score threshold (90 at
 0.5, 97 at 0.4 on this frame), and with the frame's **encoding** — an H.264 re-encode of this
-same frame read 94 faces.
+same frame read 94 faces. **Overlapping the tiles was tested and rejected:** 4×3 tiles padded
+by 15% raised the raw count but never added a face after merging (unique-to-overlap boxes: **0**;
+merged dropped to 90) while costing 30–45% more time — consistent with YuNet being nearly
+grid-insensitive at native resolution.
 
 **Stage 2 — MediaPipe landmarks + blendshapes on native crops around each detection:**
 90 crops → **83 landmark sets** (478 landmarks, 52 ARKit blendshapes each) in **0.30 s**,
@@ -125,6 +128,21 @@ the mesh model declines to fit it, which is why 83 ≠ 90.)
   both and flags on `jawOpen`.
 - **A pre-flight frame check for agent edits:** a script can sample N frames per clip and
   reason about content before proposing cuts or before choosing an angle.
+- **A per-identity mouth reading across time (`--seq N`)** — an honest but *small* win, measured
+  before being sold. Two choir riser shots at one timecode, 10 samples at stride 4: per-frame
+  landmark rate **0.851 → per-identity coverage 0.874** on one clip (90 of 103 tracks got at
+  least one landmark) and **0.664 → 0.682** on the other (75 of 110). The gain is only ~2 points
+  because landmark failures are mostly **persistent per identity** (a singer turned in profile,
+  a neighbour occluding) rather than transient per frame — pooling can't fix a face the mesh
+  model never fits. Three rules from measuring it:
+  1. Keep `--stride` at **4–8**. Association is greedy one-to-one scored `0.7×IoU + 0.3×SFace
+     cosine`; at stride 4 the match-IoU median is 0.956, at stride 30 it collapses to 0.760
+     (min 0.205) and the ~88-face shot opens 123 tracks.
+  2. **Never read a distinct-people count from `tracks_total`** — it runs 10–40% above the
+     per-frame face count because detection itself flickers at the edges of the frame.
+  3. Cost is unchanged: ~1.3 s per sampled frame at full pipeline (detect + embeddings +
+     landmarks). The one-seek decoder matters — per-frame seeking on long-GOP 8.1K HEVC costs a
+     full GOP decode each time.
 
 ## Limits worth stating
 
@@ -256,4 +274,4 @@ the comparison fair, and it says the quality model is redundant here.
 |---|---|
 | `install-vision.sh` | Builds the pinned 3.12 venv, fetches the five model files (MediaPipe landmarker/pose/blaze ×2 + YuNet + SFace), loads each one to prove it isn't truncated, optionally patches the MCP server venv. `--dry-run` is honest: it writes nothing. |
 | `compare/` | The harness for judging detectors and models: one backend per process, IoU matching across runs, label-free recognition separability (`--recognizer` swaps the SFace build for quantisation A/B), `threshold_audit.py` for deciding a score threshold on *your* footage, and `quality_filter.py` for testing a quality-assessment model as a false-positive filter — persistence-based groups, with detection score as the competing predictor. Keep it to re-derive any number here, or to check a future model before it goes near the pipeline. |
-| `face_probe.py` | Frame → JSON: native-tile detection, merged cross-tile duplicates, per-face crops → landmarks + blendshapes, optional embeddings. Its docstring carries the API gotchas above. **stdout is pure JSON**; the noise you see is MediaPipe's own glog chatter on stderr — silence it with `2>/dev/null` when parsing. |
+| `face_probe.py` | Frame → JSON: native-tile detection, merged cross-tile duplicates, per-face crops → landmarks + blendshapes, optional embeddings, and `--seq N` for temporal pooling (track faces across sampled frames, pool mouth state per identity — numbers and caveats above). Its docstring carries the API gotchas above. **stdout is pure JSON**; the noise you see is MediaPipe's own glog chatter on stderr — silence it with `2>/dev/null` when parsing. |
