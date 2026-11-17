@@ -413,6 +413,8 @@ change, so the wave records measured on 5.3.0 still stand. Also re-confirmed tha
 OpenCode **v2.3.0** is still the newest `v2` tag upstream; Splash **1.6.1** matches brew
 stable; the vision venv shows no drift in the three pins; and OpenCV **5.1.0** is *still*
 tagged-only on GitHub with no PyPI wheels (`pip index` → newest installable 5.0.0.93).
+Resolve **21.2 build 6** (2026-11-04) is also still the newest desktop build, so the local
+install is current.
 The one caveat worth knowing about a self-updating server: an MCP process that was already
 running keeps its pre-update code in memory (check `ps -o lstart` against the install
 directory's mtime), so a restart — not just a wait — is what picks up the new version.
