@@ -143,6 +143,14 @@ the mesh model declines to fit it, which is why 83 ≠ 90.)
   3. Cost is unchanged: ~1.3 s per sampled frame at full pipeline (detect + embeddings +
      landmarks). The one-seek decoder matters — per-frame seeking on long-GOP 8.1K HEVC costs a
      full GOP decode each time.
+  4. **…until you add `--no-embeddings`, which makes it 2.2× cheaper for free.** On both riser
+     shots at stride 4, IoU-only association produced *digit-identical* output to the
+     SFace-assisted one — 103/110 tracks, 90/75 identities with a reading, coverage 0.874/0.682,
+     match IoU 0.956/0.915 — at **0.61/0.58 s per frame instead of 1.37/1.32**. At strides that
+     keep association sound, IoUs are high enough that the cosine term never changes a pairing;
+     you're paying 7.5 ms × ~90 faces per frame for a term that does nothing. Untested at larger
+     strides or moving subjects — where association degrades anyway — so keep embeddings if
+     either applies.
 
 ## Limits worth stating
 

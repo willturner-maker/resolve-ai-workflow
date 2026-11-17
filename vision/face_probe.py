@@ -58,6 +58,9 @@ one clip, 0.664 vs 0.682 on the other — because landmark failures are mostly p
 per identity (profiles, occlusion), not transient per frame. Keep --stride 4-8: at
 stride 30 the association degrades (match IoU median 0.956 -> 0.760). Never read a
 distinct-people count from tracks_total: it runs 10-40% above the per-frame face count.
+On a locked-off shot, pair --seq with --no-embeddings: IoU-only association measured
+digit-identical output (tracks, coverage, match IoU) at 0.6 s/frame instead of 1.3 s —
+at sound strides the cosine term never changes a pairing. Untested with moving subjects.
 """
 
 from __future__ import annotations
