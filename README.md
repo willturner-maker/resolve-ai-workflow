@@ -425,7 +425,10 @@ above ~0.98, the engine is warm and the next pass is the one you publish.
 ## Verified stack
 
 Checked current on 2026-11-07 and **re-verified 2026-11-09** by re-running every
-command below, so these are versions that were **latest on those days**, not guesses:
+command below, so these are versions that were **latest on those days**, not guesses.
+For the **live 2026-11-18 state** — including the harness, now **OpenCode v2.3.1** — skip to
+the dated entries below, newest last; `Claude Code 2.1.319` in the list below is that earlier
+snapshot, predating the 2026-11-16 migration (`HARNESS-MIGRATION.md`), not the current harness:
 
 Splash 1.6.0 · Qwen3.8-Flash-Next IQ3_S · Claude Code 2.1.319 ·
 davinci-resolve-mcp 4.19.3 (Python venv + Node 26.13.0) · brave-search MCP 2.1.4
