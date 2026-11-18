@@ -13,8 +13,9 @@ the only leg that costs money and leaves the machine.
   → managed tree under `~/Library/Application Support/davinci-resolve-mcp`
   (own venv; marker file `.davinci-resolve-mcp-managed.json` holds the version).
 - Current verified version on this workstation: **5.3.3** (installed tree's
-  `package.json`, read 2026-11-18; npm latest is 5.3.4 — unprobed, adoption
-  waits for the transition protocol: fingerprint + trap re-arm). The 4.19.x →
+  `package.json`, read 2026-11-18; npm latest is 5.3.4 — release notes say docs-only
+  (house-style skill conventions, "no tool behaviour changes"), but adoption still runs
+  the transition protocol: sync → reconnect → fingerprint diff). The 4.19.x →
   5.x majors got the deliberate path (sync → reconnect both → rerun the
   benchmark suite), never a casual `sync`; the new-series wave records
   (2026-11-17h baseline, 21/21) were measured on 5.3.x.

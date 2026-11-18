@@ -629,6 +629,22 @@ which is why the dated records are not rewritten. What gets corrected is only cu
 claims: this entry, and the "current verified version" line in `mcp/mcp-config.md`. Node on the
 live host is 26.13.1; Splash 1.7.0 still brew stable (both re-read live today).
 
+**2026-11-18, later — same-day re-sweep.** `npm view` confirms the community MCP at **5.3.4**, and
+the marker file dates the managed tree's last self-update (5.3.3) at 01:23 UTC — the 5.3.4 release
+landed ~2 h later, so the running server is still 5.3.3, the known "already-running keeps its
+pre-update code" trap. The 5.3.4 release notes are **documentation only** (two house-style skill
+conventions — word-by-word subtitle splitting and native-Fusion motion graphics — in
+`docs/SKILL.md`/`.agents/skills`): "no tool behaviour changes", offline-verified. For the bench
+series it is still a version move: adoption means sync → reconnect → fingerprint diff
+(expected: `package_version` only, identical tool/action counts). opencode upstream tags
+**v2.3.2** (GPT-6.2 prompt-caching fix on the Responses route + a `webfetch` output-shape fix —
+neither touches the Splash/Qwen path); daily stays on the benchmarked 2.3.1, and a bench wave
+upgrade would re-pin the harness and record a drift line. Upgraded today: fontconfig 2.18.3→2.18.4
+(ffmpeg runtime dep), gh 2.104.0→2.105.0 (tooling), and the vision venv's two peripherals
+(platformdirs 4.14.7, tifffile 2026.11.16) with the import chain re-verified after — the three
+pins (opencv/-contrib 5.1.0.95, mediapipe 1.2.3, numpy 2.5.5) unchanged, and the OpenCV wheel
+watch checked: 5.1.0.95 is still newest on PyPI, no action.
+
 ## Versioning
 
 This repo is semver from **v2.0.0** — the OpenCode harness switch:
