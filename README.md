@@ -388,13 +388,20 @@ the same day it shipped.
 - Vision probe returns 0 faces on a big frame → you're asking a detector to see a 1 % face. Run at native resolution (`--tile auto`), then let stage 2 crop; see the two-stage rule in `vision/README.md`.
 - Server's `strata_run(analyzers=['face'])` says it can't run → mediapipe/opencv belong to the *server* venv there: `bash vision/install-vision.sh --mcp-server-venv <server venv>`, then `/mcp` → reconnect.
 - Brave MCP connects but every search returns nothing → the key belongs to the **Answers** plan, not **Search** — keys are plan-bound; see `mcp/mcp-config.md`.
-- **Attached Fusion comps vanish after a project switch** → this is real Resolve behavior,
-  not an MCP bug: comps created on timeline items do **not** survive project close/load churn
-  (proven 2026-11-17g: all six T8 trials reported comp-count 1 in-wave, every timeline read
-  comp-count 0 afterward, no Resolve restart involved). Daily rule after any
-  `project_manager.load`: re-verify with `timeline_item_fusion.get_comp_count` before trusting
-  a comp, re-attach (`add_comp`) and rebuild if it reads 0. The benchmark grades T8 from an
-  in-trial snapshot taken at session end for exactly this reason.
+- **Do you still have the Fusion comp you attached?** Unknown until you check — survival across a
+  project switch is **not deterministic**, and the two benchmark waves disagree in a way worth
+  knowing:
+  - 2026-11-17g: all six T8 trials read comp-count **1** in-wave and **0** afterwards (project
+    close/load churn during grading, no Resolve restart).
+  - 2026-11-17h: all three T8 trials read **1** in-wave **and 1** post-wave — same grader, same
+    project-load pattern, comps created both through `timeline_item_fusion.add_comp` and through
+    the scripting bridge.
+  So: never assume either direction. After any `project_manager.load`, re-verify with
+  `timeline_item_fusion.get_comp_count`; if it reads 0, the comp is gone — re-attach (`add_comp`)
+  and rebuild. (Correction, same day: an earlier version of this note claimed comps "do not survive"
+  project churn. That was the 17g reading stated too strongly; 17h disproved the universal form.
+  The benchmark grades T8 from an in-trial snapshot precisely because the outcome is not
+  predictable, and keeps the post-wave read as product-behavior data.)
 
 **Safe update:** `npx -y davinci-resolve-mcp@latest sync`, then `/mcp` →
 reconnect **both** servers. When a major version changed, re-run a benchmark
