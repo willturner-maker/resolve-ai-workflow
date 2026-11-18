@@ -645,6 +645,15 @@ upgrade would re-pin the harness and record a drift line. Upgraded today: fontco
 pins (opencv/-contrib 5.1.0.95, mediapipe 1.2.3, numpy 2.5.5) unchanged, and the OpenCV wheel
 watch checked: 5.1.0.95 is still newest on PyPI, no action.
 
+**2026-11-18, later — MCP 5.3.4 adopted, the cheap-diff way.** Synced via the upstream path;
+the fingerprint instrument (benchmarks `mcp_fingerprint.py`) moved on exactly two fields, and
+the changed `server.py` hash was audited rather than trusted: the whole executable delta over
+5.3.3 is the `VERSION` string in two files (4 diff lines; `bin/`, `resolve-advanced/`, the tool
+set and action-branch counts all byte-identical). The house-style skill docs never reach the
+agent tool surface (no `SKILL.md` reference anywhere in the server source), so no trap re-arm
+was needed — recorded with the diff as the reason, not the release notes. Running server
+processes keep 5.3.3 in memory until the next reconnect, as always.
+
 ## Versioning
 
 This repo is semver from **v2.0.0** — the OpenCode harness switch:
