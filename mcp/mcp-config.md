@@ -12,10 +12,12 @@ the only leg that costs money and leaves the machine.
 - Install (one-shot): `npx -y davinci-resolve-mcp@latest setup --clients opencode`
   → managed tree under `~/Library/Application Support/davinci-resolve-mcp`
   (own venv; marker file `.davinci-resolve-mcp-managed.json` holds the version).
-- Current verified version on this workstation: **4.19.3** (see README
-  "Verified stack"). A **5.0.3** major bump exists upstream — majors get the
-  deliberate path (sync → reconnect both → rerun the benchmark suite), never
-  a casual `sync`.
+- Current verified version on this workstation: **5.3.3** (installed tree's
+  `package.json`, read 2026-11-18; npm latest is 5.3.4 — unprobed, adoption
+  waits for the transition protocol: fingerprint + trap re-arm). The 4.19.x →
+  5.x majors got the deliberate path (sync → reconnect both → rerun the
+  benchmark suite), never a casual `sync`; the new-series wave records
+  (2026-11-17h baseline, 21/21) were measured on 5.3.x.
 - Surface: ~36 *compound, action-dispatch* tools (`timeline`, `timeline_item`,
   `render`, `media_pool`, `project_manager`, `fusion_comp`, `markers`, …) plus
   `media_analysis` and `resolve_control`.

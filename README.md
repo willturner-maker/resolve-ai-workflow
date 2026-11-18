@@ -322,9 +322,17 @@ nothing reports as stale.
 The stack ships with its own benchmark practice — full docs, scripts and raw
 JSONL at **https://github.com/willturner-maker/benchmarks**. Headlines:
 
-- **Agentic correctness**: 6 task types × 3 fresh agents each, graded only from
-  independent read-backs of Resolve state: **18/18 outcomes verified, 18/18 honest
-  reports** (across MCP 4.18.5 and 4.19.0, Resolve 21.1.2 and 21.2).
+- **Agentic correctness** (current series, 2026-11-17h baseline): seven briefs × 3 trials = 21
+  sessions per pass, graded only from independent read-backs of Resolve state: **21/21 outcomes
+  verified, 21/21 honest reports** in the clean pass (MCP 5.3.1 / OpenCode v2.3.0 / Resolve 21.2;
+  a first pass carrying a disclosed context deviation scored 20/21 and is kept as record, not
+  headline). The Claude-era ladder stays quoted separately at 126/126 (MCP 4.18.5–4.19.0,
+  Resolve 21.1.2–21.2) and is never blended with these rows.
+- **Follow-up waves, split-reported**: a 42-session friction A/B (Tier 3, 2026-11-18k: 42/42
+  honest, 40/42 verified — the one flip was a recorded repetition collapse, and the tested
+  naming rule was reverted on pre-committed criteria), and a frontier brief (Tier 4, 2026-11-18l,
+  n=6: geometry 6/6, honesty 6/6, outcome split 0 preserved-native / 6 destroyed-then-repaired —
+  verification discipline at ceiling, path discovery at zero).
 - **Operation latency** (server-side medians): timeline probe ~11 ms,
   render-job prepare ~130 ms, output verification ~40 ms, timeline-set ~100 ms.
 - **Render probe** (121-frame UHD H.264 from an 8K source): cold ~3.1 s,
@@ -602,6 +610,21 @@ Claude Code terminal launcher used to interpolate paths/commands into AppleScrip
 with no breaking changes declared. This workstation was still on 4.19.3 on the re-check day;
 a major bump gets the usual treatment: sync, reconnect, rerun the benchmark suite, then
 update the numbers here.
+
+**2026-11-18 — live-host state, and which older cells this supersedes.** Re-checked today against
+upstream: **OpenCode v2.3.1** is the installed harness (upstream now tags v2.3.2 — unverified,
+daily stays on 2.3.1); the community MCP installed tree reads **5.3.3** (`package.json`) with npm
+at **5.3.4** — unprobed, and adoption waits for the transition protocol (fingerprint + trap
+re-arm), not for `sync`. The 5.3.x benchmark evidence is live: the Tier 3/4 waves ran on 5.3.3
+with the trap re-arm and the F3 fork probe re-measured the same day they dispatched. On the live
+vision venv: **opencv + opencv-contrib 5.1.0.95** · mediapipe 1.2.3 · numpy 2.5.5 · scenedetect
+0.7.3 · pedalboard 0.9.26, import chain re-verified after the move. That supersedes the "OpenCV
+5.1.0.95 still has no PyPI wheels / 5.0.0.93 newest installable" and "opencode v2.3.0 = newest
+upstream" cells in the dated entries above — each was true at its timestamp; the wheels landed
+later that same day, and the "OpenCV watch fired" entry directly above already records the move,
+which is why the dated records are not rewritten. What gets corrected is only current-state
+claims: this entry, and the "current verified version" line in `mcp/mcp-config.md`. Node on the
+live host is 26.13.1; Splash 1.7.0 still brew stable (both re-read live today).
 
 ## Versioning
 

@@ -25,10 +25,11 @@
 #              opencode.json in this repo. Never wired into the global config —
 #              project-scoping is deliberate: the agent pool stays provably plugin-free.
 #
-# Verified against: macOS 26.x arm64, DaVinci Resolve Studio 21.2, Splash 1.6.x,
-# MCP 5.3.0, OpenCode v2.3.0, node 26.x, ffmpeg 9.x. Python 3.11+ required by the MCP
-# installer. The OpenCode path is the daily-driver configuration on the reference host
-# (waves 16e/16f of the resolve-agentic benchmark ran against exactly this stack).
+# Reference host as of 2026-11-18: macOS 26.x arm64, DaVinci Resolve Studio 21.2, Splash 1.7.0,
+# community MCP 5.3.3, OpenCode v2.3.1, node 26.x, ffmpeg 9.x (versions re-read live on that
+# date; the installer itself last ran end-to-end on the reference host before the 5.3.x moves).
+# Python 3.11+ required by the MCP installer. The OpenCode path is the daily-driver configuration
+# on the reference host (the resolve-agentic benchmark waves run against exactly this stack).
 #
 # Run:  bash install.sh [--vision] [--lsp]
 
