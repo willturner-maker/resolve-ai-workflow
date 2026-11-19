@@ -3,8 +3,11 @@
 The workstation registers three Resolve servers side by side. They are
 complementary — OpenCode routes between them per task, and having all three is
 what makes the workflow feel like one operator with hands on every layer of
-Resolve. At the end sits one optional non-Resolve companion (`brave-search`),
-the only leg that costs money and leaves the machine.
+Resolve. Two optional non-Resolve companions sit at the end: `brave-search` —
+the only leg that costs money and leaves the machine — and `mcp-for-blender`,
+which drives the headless graphics leg. A last section covers the **LSP layer**:
+not MCP, but it lives in the same config file and restores V1-style language
+intelligence to OpenCode V2.
 
 ## 1. `davinci-resolve` — community server (Python)
 
@@ -93,10 +96,54 @@ claim in the README was checked through a route like it.
   reason the pre-commit scan keeps them out of commit messages — describe
   properties, never quote identifiers.
 
+## Optional companion: `mcp-for-blender` — community Blender MCP
+
+- Package: `mcp-for-blender` on PyPI (MIT, by ahujasid; renamed from
+  `blender-mcp`) — run via uvx. The MCP half runs on your machine; the acting
+  half is an addon inside a running Blender, started from its 3D-viewport
+  sidebar.
+- Registered (global config, MCP env carries the policy):
+
+  ```jsonc
+  "blender": {
+    "type": "local",
+    "command": ["uvx", "mcp-for-blender@2.3.1"],
+    "environment": { "BLENDER_MCP_SAFE_MODE": "1", "DISABLE_TELEMETRY": "true" }
+  }
+  ```
+
+- **Pin the server, and mean the pin.** Upstream ships roughly weekly, and an
+  unpinned `uvx mcp-for-blender` silently swaps the SAFE_MODE policy tables
+  under you (a wiped uv/npx cache pulls latest on next start, same thing). The
+  server ships an addon updater — `uvx mcp-for-blender@<pinned> update`
+  refreshes the addon copy in every `~/Library/Application Support/Blender/<ver>`
+  with `.bak` backups and never clobbers locally edited copies. The one combo
+  that actually breaks is a pinned server with a drifted addon.
+- **Version truth:** the addon's `bl_info["version"]` has been stuck at (2, 0)
+  across 2.2.x–2.3.x. The real signals are `ADDON_PROTOCOL_VERSION` in the
+  installed addon file vs `EXPECTED_ADDON_PROTOCOL_VERSION` in the server's
+  `addon_manager.py` — equal means compatible. `get_addon_status` reports both.
+- **What `BLENDER_MCP_SAFE_MODE=1` is:** an AST allowlist validator in the MCP
+  server — a script must clear it before bytes reach Blender. The threat model
+  is prompt injection from third-party asset descriptions (stock sites' text
+  ends up in context). Allowed: `bpy`/`bmesh`/`mathutils` + a pure-Python
+  subset, rendering, saving, import/export operators. Blocked: `eval/exec`, the
+  dunder ladder, `os`/`sys`/`subprocess`, persistence hooks (`bpy.app.handlers`,
+  drivers, `register_class`), external `.blend` loading, `bpy.data.texts`.
+  **`import numpy` is deliberately rejected** even though Blender bundles it —
+  `numpy.load` of a hostile `.npy` is arbitrary deserialization. Rejections
+  come back with the offending line number. Honest limit, stated in the
+  package itself: it guards the MCP path only — the addon's socket takes
+  unauthenticated `execute_code` from any local process, so keep
+  `BLENDER_HOST` on localhost.
+- `generate_gaussian_world` (World Labs Marble splats) requires Blender 5.3+.
+- The headless side of the graphics workflow (no addon, no MCP — Blender's own
+  Python) is the `blender/` directory of this repo.
+
 ## Registering / verifying
 
 ```bash
-opencode mcp list                    # expect the three Resolve names (+ brave-search if opted in)
+opencode mcp list                    # expect the three Resolve names (+ brave-search, + blender if opted in)
 # After any update, restart the OpenCode session — MCP servers spawn with it.
 ```
 
