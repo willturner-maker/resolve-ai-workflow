@@ -12,6 +12,9 @@
 #   MAX_CACHE_DISK=256G   64G and 128G both hit quota and evicted warm prefixes.
 #                         Binds only at NEXT launch; never restart mid-session.
 #   REASONING_EFFORT=medium  default when requests set none (see flags below).
+#   THINKING_BUDGET=32768    cap on thinking per thinking request that sets none.
+#                         Never bound at medium (largest step 2,348); xhigh consumed
+#                         the previous 16384 in full. Binds only at NEXT launch.
 # One-off example: MAX_MEMORY=32G MAX_CACHE_DISK=64G ./start.sh
 
 set -euo pipefail
@@ -33,7 +36,10 @@ MAX_MEMORY="${MAX_MEMORY:-56G}"
 # medium by default: the 2026-11-17g agentic A/B scored xhigh identical to medium
 # at ~3x the thinking tokens. Use --xhigh only when a task earns it.
 REASONING_EFFORT="${REASONING_EFFORT:-medium}"
-THINKING_BUDGET="16384"     # caps runaway thinking (~3 min worst case)
+# Budget-abiding: the engine charges for thinking it generates, not for the ceiling,
+# so a larger cap is free while unused and only bounds a runaway step. 32768 is ~14x
+# the largest single step seen at medium (2,348) and ~2x the xhigh worst case.
+THINKING_BUDGET="${THINKING_BUDGET:-32768}"   # caps runaway thinking; 16384->32768 on 2026-11-19: medium peaks ~2.4k/step (never bound), but xhigh once consumed all 16k (16,385 tok) and long written instructions need the headroom
 
 # Optional: move the persistent cache to an external SSD,
 # e.g. EXTERNAL_CACHE="/Volumes/YourExternalSSD/splash-cache"

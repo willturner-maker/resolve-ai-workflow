@@ -653,6 +653,20 @@ agent tool surface (no `SKILL.md` reference anywhere in the server source), so n
 was needed — recorded with the diff as the reason, not the release notes. Running server
 processes keep 5.3.3 in memory until the next reconnect, as always.
 
+**2026-11-19 — thinking budget 16k → 32k, sized from wave data rather than feel.** The tier-4 wave
+logs now carry per-step reasoning, and the peak single step was **2,348 tokens** — the old 16k cap
+never came close under the `medium` default, so raising it changes nothing about today's results. It
+was raised for two concrete reasons: the 17g-era probe showed **xhigh consuming the whole 16k budget
+(16,385 tokens)** for an answer `medium` reached in 2,320, so the cap is a real ceiling on deeper arms;
+and real project work now sends long written instructions, where a truncated *visible* answer costs
+more than a truncated thought. Paired on the harness side with the model's **output limit 16,384 →
+32,768** in `~/.config/opencode/opencode.json`, because thinking tokens count against the same
+completion budget — a bigger thinking cap on a small output ceiling would just move the truncation to
+the worse place. The benchmark trial config deliberately **still defaults to the sealed 16,384**
+(18l/18m stay reproducible); new brief families opt into 32,768 with `AGBENCH_OUTPUT_TOKENS` and
+declare it as a stack move. As always with `start.sh` edits, the running engine keeps 16,384 until the
+next launch — the live value is read from the supervisor's argument list, never from the file on disk.
+
 ## Versioning
 
 This repo is semver from **v2.0.0** — the OpenCode harness switch:
