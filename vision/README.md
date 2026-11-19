@@ -1,6 +1,6 @@
 # Vision add-on — faces, mouths, and counts (opt-in)
 
-An **optional** layer: a second Python 3.12 virtualenv, five model files (MediaPipe
+An **optional** layer: a second Python 3.12 virtualenv, six model files (MediaPipe
 landmarker/pose/blaze + OpenCV YuNet/SFace), and one probe script. It gives agent scripts a
 way to ask *"how many faces are in this frame, and whose mouth is open"* without going through
 Resolve at all — JSON out, no round trip through the edit engine. Detection and identity run on
@@ -195,7 +195,7 @@ the mesh model declines to fit it, which is why 83 ≠ 90.)
 
 ## Privacy — read this before you run it on client footage
 
-Face geometry and 512-d embeddings are **identity data**. Consequences I hold myself to, and
+Face geometry and 128-d embeddings (SFace is 128-d) are **identity data**. Consequences I hold myself to, and
 suggest you keep:
 
 - Default output carries boxes, scores and scalar mouth state — **no vectors**. Vectors appear
@@ -288,6 +288,6 @@ the comparison fair, and it says the quality model is redundant here.
 
 | File | What it is |
 |---|---|
-| `install-vision.sh` | Builds the pinned 3.12 venv, fetches the five model files (MediaPipe landmarker/pose/blaze ×2 + YuNet + SFace), loads each one to prove it isn't truncated, optionally patches the MCP server venv. `--dry-run` is honest: it writes nothing. |
+| `install-vision.sh` | Builds the pinned 3.12 venv, fetches the six model files (MediaPipe landmarker/pose/blaze ×2 + YuNet + SFace), loads each one to prove it isn't truncated, optionally patches the MCP server venv. `--dry-run` is honest: it writes nothing. |
 | `compare/` | The harness for judging detectors and models: one backend per process, IoU matching across runs, label-free recognition separability (`--recognizer` swaps the SFace build for quantisation A/B), `threshold_audit.py` for deciding a score threshold on *your* footage, and `quality_filter.py` for testing a quality-assessment model as a false-positive filter — persistence-based groups, with detection score as the competing predictor. Keep it to re-derive any number here, or to check a future model before it goes near the pipeline. |
 | `face_probe.py` | Frame → JSON: native-tile detection, merged cross-tile duplicates, per-face crops → landmarks + blendshapes, optional embeddings, and `--seq N` for temporal pooling (track faces across sampled frames, pool mouth state per identity — numbers and caveats above). Its docstring carries the API gotchas above. **stdout is pure JSON**; the noise you see is MediaPipe's own glog chatter on stderr — silence it with `2>/dev/null` when parsing. |

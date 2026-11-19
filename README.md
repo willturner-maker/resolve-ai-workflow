@@ -137,8 +137,7 @@ bash start.sh --low        # or --high; also accepts --effort=<value> / REASONIN
    begin in seconds.
 4. The dashboard comes up on :8280, then OpenCode opens. Resolve is
    **not** launched: the MCP starts it headless (`-nogui`) on the first
-   Resolve tool call. To open the GUI at boot instead, prefix the start
-   with `LAUNCH_RESOLVE_GUI=1`.
+   Resolve tool call (open the GUI yourself whenever you want a handoff).
 5. Verify the servers: `opencode mcp list` — expect the three Resolve names.
 6. Optional: `macmon` in a second terminal to watch unified-memory pressure.
 7. Confirm the MCP path with a read-only probe — in OpenCode ask:

@@ -15,3 +15,5 @@ compare/models
 # local tooling (LSP plugin clone + machine-local config)
 .opencode/
 opencode.json
+.venv/
+pyrightconfig.json

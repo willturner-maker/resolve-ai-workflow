@@ -68,7 +68,7 @@ claim in the README was checked through a route like it.
 
   ```bash
   opencode mcp add --global brave-search -e BRAVE_API_KEY='<your-key>' \
-    -- npx -y @brave/brave-search-mcp-server@2.1.4
+    -- npx -y @brave/brave-search-mcp-server@2.1.5
   ```
 
 - **Requirements — the paid part** (prices read from Brave's own pricing page,

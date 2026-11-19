@@ -610,7 +610,7 @@ def main() -> int:
                             meta=json.dumps(meta),
                             normalised=np.asarray([True]),
                             cosine_threshold=np.asarray([0.363], dtype=np.float32))
-        print(f"WROTE {len(vecs)} {faces[0]['embedding_dim']}-d L2-normalised face vectors to "
+        print(f"WROTE {len(vecs)} {(faces[0]['embedding_dim'] if faces else 0)}-d L2-normalised face vectors to "
               f"{args.save_embeddings} (cosine >= 0.363 = same person) — identity data, "
               f"keep it local.", file=sys.stderr)
 

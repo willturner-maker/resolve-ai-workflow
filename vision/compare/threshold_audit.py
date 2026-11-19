@@ -21,6 +21,14 @@ import argparse, json, os, sys
 import cv2
 import numpy as np
 
+try:  # silence per-create setPreferableTarget WARN spam (vision/README.md rule 3)
+    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+except AttributeError:
+    try:
+        cv2.setLogLevel(1)
+    except AttributeError:
+        pass
+
 DET_MODEL = "face_detection_yunet_2023mar.onnx"
 
 

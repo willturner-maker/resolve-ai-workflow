@@ -56,6 +56,13 @@ def models_dir(opts):
 
 def run_yunet(img, opts):
     import cv2
+    try:  # silence per-create setPreferableTarget WARN spam (vision/README.md rule 3)
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except AttributeError:
+        try:
+            cv2.setLogLevel(1)
+        except AttributeError:
+            pass
     base = models_dir(opts)
     model = opts.model or os.path.join(base, "face_detection_yunet_2023mar.onnx")
     t0 = time.time()
@@ -143,7 +150,10 @@ def run_mediapipe(img, opts):
             b = d.bounding_box
             boxes.append({"x": x0 + b.origin_x, "y": y0 + b.origin_y, "w": b.width, "h": b.height,
                           "score": float(d.categories[0].score), "tile": [i, j]})
-    return {"model": "mediapipe blaze_face_short_range", "init_s": round(init, 2),
+    # Label the ACTUAL model file: merge_compare.py keys run pairs by this
+    # string; hard-coding short_range while defaulting to full_range mislabeled
+    # every report (fixed 2026-11-18).
+    return {"model": f"mediapipe {os.path.basename(opts_path)}", "init_s": round(init, 2),
             "grid": [gx, gy], "detect_s": round(tsum, 3), "boxes": boxes, "embeddings": None}
 
 

@@ -71,11 +71,15 @@ fi
 # ── 2. Packages ────────────────────────────────────────────────────────────
 # PINS are exactly what runs on the reference workstation. --loose installs latest if
 # pip cannot resolve them for your Python/platform.
+# 2026-11-18: pins bumped to the live, re-measured stack (benchmarks visual-venv run5):
+# opencv/-contrib 5.1.0.95 = ×0.853 median detect time, FFmpeg 9.0.2 (H.264 face counts
+# are decode-version-dependent records), readNetFromTensorflow removed. Rule 4 still
+# applies to these wheels: FaceRecognizerSF.match() mutates its input vectors.
 PINS=(
-  "mediapipe==1.2.2"
-  "opencv-python==5.0.0.93"           # FaceDetectorYN / FaceRecognizerSF live in objdetect here
-  "opencv-contrib-python==5.0.0.93"   # aruco/extra modules; harmless next to opencv-python
-  "numpy==2.5.4"
+  "mediapipe==1.2.3"
+  "opencv-python==5.1.0.95"           # FaceDetectorYN / FaceRecognizerSF live in objdetect here
+  "opencv-contrib-python==5.1.0.95"   # aruco/extra modules; harmless next to opencv-python
+  "numpy==2.5.5"
   "scipy==1.18.1"
   "pedalboard==0.9.26"                # audio side of the same analyses
   "scenedetect==0.7.2"
@@ -157,7 +161,7 @@ if [[ -n "$MCP_VENV" ]]; then
   warn "Trade-off (measured, not theoretical): the server installer's repair path recreates"
   warn "that venv and wipes extra packages, and opencv pins then share one resolver with the"
   warn "runtime that must keep working. Re-run this flag after any server repair."
-  run "'$MCP_VENV/bin/pip' install mediapipe==1.2.2 opencv-python==5.0.0.93"
+  run "'$MCP_VENV/bin/pip' install mediapipe==1.2.3 opencv-python==5.1.0.95"
   ok "server venv updated — restart the MCP servers (/mcp → reconnect) to pick it up"
 fi
 

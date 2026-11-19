@@ -144,13 +144,27 @@ def main():
     opts = ap.parse_args()
 
     import cv2
+    try:  # silence per-create setPreferableTarget WARN spam (vision/README.md rule 3)
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except AttributeError:
+        try:
+            cv2.setLogLevel(1)
+        except AttributeError:
+            pass
     base = opts.models or os.environ.get("VISION_MODELS") or os.path.dirname(os.path.abspath(__file__))
     def p(name):
         return name if os.path.isabs(name) else os.path.join(base, name)
 
     net = None
     if not opts.no_quality:
-        net = cv2.dnn.readNetFromONNX(p(opts.quality_model))
+        qp = p(opts.quality_model)
+        if not os.path.exists(qp):
+            raise SystemExit(
+                f"quality model not found: {qp}\n"
+                "eDifFIQA weights are deliberately NOT fetched by install-vision.sh "
+                "(measured-and-rejected as an FP filter; CC-BY-4.0 if you still want them). "
+                "Fetch manually into --models, or pass --no-quality.")
+        net = cv2.dnn.readNetFromONNX(qp)
     sf = cv2.FaceRecognizerSF.create(p(opts.recognizer), "")
     det = cv2.FaceDetectorYN.create(p("face_detection_yunet_2023mar.onnx"), "", (64, 64),
                                     opts.low, 0.3, 5000)
