@@ -685,6 +685,22 @@ Same run, unrelated to the flag: prefill beyond w12 is flat at **3,513.7–3,520
 so width buys nothing there, and `memory_plan` explains why the throughput plateau exists at all:
 **`maximum_batch_width: 4`**. As always these bind at the next launch, not under a running engine.
 
+**2026-11-19 (later) — the queueing-regime wave ran, and it corrects one clause above.** The
+`--queue-size 64` engine carried a rebuilt KV driver to **48 concurrent ~55k-token requests: all
+admitted, zero refusals**, 2,652,720 prompt tokens = **17.04× the 155,648-token resident budget**,
+with suspensions 0, spill 0, demote 0 and `capacity_failures` 0 on every round. So the flag was indeed
+the whole wall. But **"KV-pressure work can now actually queue" turned out to be wrong about where the
+queue is**: `admission.waiting`, `waiting_memory`, `waiting_concurrency` and `held_behind_refusal` all
+peaked at **0 in every round past 32 in flight**. Requests past the old cap are admitted into lanes and
+wait inside the **scheduler's prefill queue**, which shows up as wall time at flat prefill — **189.5 s
+at w12 → 760.1 s at w48**, prefill pinned at 3,485.4–3,499.1 tok/s (±0.2%). Practical consequence for
+anything monitoring this engine: **`admission.*` reads idle at w48 — watch `scheduler.queued` and
+request latency instead.** Two more reads: the ladder came back better under the new flag, not
+perturbed (w1 **307.1** and peak **w4 724.6**, both best on record), and tripping KV by summed volume is
+now bounded out — the remaining KV question is one long context *held across turns* walking toward
+`context_bounds.resident` (155,633 of a 262,144 window), not more aggregate tokens. Full record:
+benchmarks `bench/splash-concurrency/results/splash-1.7.0-2026-11-19b/RECORD.md`.
+
 ## Versioning
 
 This repo is semver from **v2.0.0** — the OpenCode harness switch:
