@@ -15,6 +15,9 @@
 #   THINKING_BUDGET=32768    cap on thinking per thinking request that sets none.
 #                         Never bound at medium (largest step 2,348); xhigh consumed
 #                         the previous 16384 in full. Binds only at NEXT launch.
+#   QUEUE_SIZE=64         requests admitted at once, running or waiting; the rest get
+#                         503. Splash default is 32 (measured ceiling 2026-11-19).
+#                         Raise to 96 for a concurrent-load bench day.
 # One-off example: MAX_MEMORY=32G MAX_CACHE_DISK=64G ./start.sh
 
 set -euo pipefail
@@ -40,6 +43,13 @@ REASONING_EFFORT="${REASONING_EFFORT:-medium}"
 # so a larger cap is free while unused and only bounds a runaway step. 32768 is ~14x
 # the largest single step seen at medium (2,348) and ~2x the xhigh worst case.
 THINKING_BUDGET="${THINKING_BUDGET:-32768}"   # caps runaway thinking; 16384->32768 on 2026-11-19: medium peaks ~2.4k/step (never bound), but xhigh once consumed all 16k (16,385 tok) and long written instructions need the headroom
+# Requests admitted at once, running or waiting; anything past this gets HTTP 503
+# (frontend_overloaded). Splash default is 32, and the 2026-11-19 KV run proved that is
+# the binding ceiling for concurrent-load work: w32 admitted, w33 refused instantly with
+# waiting_concurrency=0 (refused, never queued). 64 gives the KV stage room to show real
+# queueing/spill behaviour and leaves slack over one interactive session. Bench day only:
+# QUEUE_SIZE=96 ./start.sh if you want to probe past 64 concurrent streams.
+QUEUE_SIZE="${QUEUE_SIZE:-64}"
 
 # Optional: move the persistent cache to an external SSD,
 # e.g. EXTERNAL_CACHE="/Volumes/YourExternalSSD/splash-cache"
@@ -75,7 +85,7 @@ for arg in "$@"; do
     -h|--help)
       echo "Usage: $0 [--27b] [--low|--medium|--high|--xhigh] [--no-macmon] [--no-metrics]"
       echo "  Thinking depth: --low | --medium (daily default) | --high | --xhigh, or REASONING_EFFORT=<value>"
-      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G EXTERNAL_CACHE=/path RESOLVE_AI_PROJECT=~/resolve-ai-workflow"
+      echo "  Env overrides: MAX_MEMORY=56G MAX_CACHE_DISK=256G QUEUE_SIZE=64 EXTERNAL_CACHE=/path RESOLVE_AI_PROJECT=~/resolve-ai-workflow"
       exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)" >&2; exit 1 ;;
   esac
@@ -89,6 +99,9 @@ case "$REASONING_EFFORT" in
   low|medium|high|xhigh) ;;
   *) error "invalid effort '$REASONING_EFFORT' — use low, medium, high or xhigh" ;;
 esac
+
+[[ "$QUEUE_SIZE" =~ ^[0-9]+$ ]] && (( QUEUE_SIZE >= 1 )) \
+  || error "invalid QUEUE_SIZE '$QUEUE_SIZE' — must be a positive integer (splash default 32)"
 
 kill_pidfile() {
   local pidfile="$1" label="${2:-process}"
@@ -117,13 +130,15 @@ command -v opencode >/dev/null 2>&1 || error "opencode not found in PATH (run in
 info "Starting Splash server with model: $MODEL"
 info "  max-memory=$MAX_MEMORY  max-cache-disk=$MAX_CACHE_DISK  persistent-cache=$PERSISTENT_CACHE"
 info "  default-reasoning-effort=$REASONING_EFFORT  thinking-token-budget=$THINKING_BUDGET"
+info "  queue-size=$QUEUE_SIZE (splash default 32; beyond this the frontend returns 503)"
 
 SERVE_ARGS=(serve --model "$MODEL" --port "$SPLASH_PORT"
   --max-cache-disk "$MAX_CACHE_DISK"
   --max-memory "$MAX_MEMORY"
   --expert-memory auto          # elastic expert store (splash >= 1.6.0); a fixed size disables elasticity
   --default-reasoning-effort "$REASONING_EFFORT"
-  --thinking-token-budget "$THINKING_BUDGET")
+  --thinking-token-budget "$THINKING_BUDGET"
+  --queue-size "$QUEUE_SIZE")
 [[ $PERSISTENT_CACHE -eq 1 ]] && SERVE_ARGS+=(--persistent-cache)
 [[ -n "$EXTERNAL_CACHE" ]] && SERVE_ARGS+=(--cache-dir "$EXTERNAL_CACHE")
 

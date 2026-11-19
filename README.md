@@ -667,6 +667,24 @@ the worse place. The benchmark trial config deliberately **still defaults to the
 declare it as a stack move. As always with `start.sh` edits, the running engine keeps 16,384 until the
 next launch — the live value is read from the supervisor's argument list, never from the file on disk.
 
+**2026-11-19 — `--queue-size 64`, because the bench found the ceiling and it wasn't KV.** A
+concurrency extension run pushed KV widths past the standing driver's w12 cap and died on
+HTTP 503 at w40. A cheap follow-up probe (tiny prompts, so token volume couldn't matter) pinned
+the boundary exactly: **w32 admitted, w33 refused instantly**, `admission.waiting_concurrency=0`
+and `held_behind_refusal=0` — refused, never queued — with the body
+`frontend request capacity is exhausted / frontend_overloaded`. The flag documents it:
+`--queue-size REQUESTS … requests admitted at once, running or waiting; more get 503
+(default: 32)`. `start.sh` now passes `--queue-size 64` (env-overridable, validated as a positive
+integer; `QUEUE_SIZE=96 ./start.sh` for a bench day going past 64 streams). Two consequences worth
+recording: KV-pressure work can now actually *queue*, which is what those stages always assumed
+would happen; and the memory governor's real answer to KV pressure is spill and disk demotion, not
+suspension — `kv.pages_active` sat pinned at 1,654 pages (52,928 tokens) across every fresh round
+from w16 to w32 while `kv_spill.spill_moves` (28,138) and `disk.kv_demotions` (4,390, plus 41
+refused) climbed — so any stop rule that waits for a suspension event is watching the wrong gauge.
+Same run, unrelated to the flag: prefill beyond w12 is flat at **3,513.7–3,520.7 tok/s (±0.2%)**,
+so width buys nothing there, and `memory_plan` explains why the throughput plateau exists at all:
+**`maximum_batch_width: 4`**. As always these bind at the next launch, not under a running engine.
+
 ## Versioning
 
 This repo is semver from **v2.0.0** — the OpenCode harness switch:
